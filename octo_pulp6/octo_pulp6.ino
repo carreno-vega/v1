@@ -51,9 +51,16 @@ byte  sens4_tx;
 byte  sens5_tx;
 byte  aux_tx;
 byte  eof_tx;
-
+/*Declaracion entradas analogas para sensores*/
+byte controlador_ph   = A0;  //Lectura controlador pH 4-20 mA a 1- 5   Volts en entrada analoga A0
+byte controlador_aux  = A1;  //Lectura controlador auxiliar 4-20 mA a 1- 5   Volts en entrada analoga A1
+byte PT100            = A2;  //Lectura controlador auxiliar 4-20 mA a 1- 5   Volts en entrada analoga A1
+byte sensor_ph        = A3; //Lectura sensor PH
+byte sensor_aux       = A4; //Lectura sensor auxiliar
+byte ADC_input        = A5; //Lectura ADC
+float voltaje_ref_ADC;  
 /*Variables propias de los sensores*/
-int sensor_ph;
+float sensor_ph_value;
 byte flag_ph1;
 byte flag_ph2;
 int sensor_ph_7_cal;
@@ -72,6 +79,10 @@ void setup()
   digitalWrite(led1,LOW);
   digitalWrite(led2,LOW);
   digitalWrite(led3,LOW);
+  
+  /*Variables a medir e implementar en progtama antes de instalacion*/
+  voltaje_ref_ADC = 4.85;   //Voltaje medido
+  
   flag_ph1 = 0;
   flag_ph2 = 0;
   incrementador_tx  = 0;
@@ -96,8 +107,13 @@ void setup()
 }
 int deco_trama()
 {
+/* ID TRAMA
+1	Trama de setpoint
+2	Trama de control manual
+3	Trama de calibraciòn*/
+
   id_trama    = arreglo[1];
-  estado_rx   = arreglo[2]; 
+  estado_rx   = arreglo[2];   // Incrementador
   
   switch(id_trama)
   {
@@ -135,7 +151,10 @@ int deco_trama()
   }
 }
 
-
+void set_point()
+{
+  
+}
 void set_manual()
 {
   switch(inst1_man)
@@ -200,17 +219,17 @@ byte set_calibracion(byte flag_c)
     { 
       if(aux1_cal == 1) //calibracion pH4
       {
-        sensor_ph_4_cal = analogRead(sensor_ph); //Almacenar milivolts para ph4
+        sensor_ph_4_cal = analogRead(sensor_ph)*(voltaje_ref_ADC/1024); //lectura pH4 de bit a milivolts
         flag_ph1 = 1;
       }
-      if else(aux1_cal == 2) //calibracion con pH7
+      else if(aux1_cal == 2) //calibracion con pH7
       {
-        sensor_ph_7_cal = analogRead(sensor_ph); //Almacenar milivolts para ph7
+        sensor_ph_7_cal = analogRead(sensor_ph)*(voltaje_ref_ADC/1024); //lectura pH4 de bit a milivolts
         flag_ph2 = 1;
       }
       if((flag_ph1 == 1) && (flag_ph2 == 1))
       {
-        paso_ph_cal = ((sensor_ph_4_cal - sensor_ph_7_cal) / 3);  //pendiente negativa -3 paso de ph x milivolt
+        paso_ph_cal = ((7-4)/(sensor_ph_7_cal - sensor_ph_4_cal)); // pH/Volt paso para cotrolador y adapatdor de 4-20 mA, voltaje referencia ADC igual a 4.85 Volts
         flag_ph1 = 0;
         flag_ph2 = 0;
       }
@@ -236,15 +255,15 @@ byte set_calibracion(byte flag_c)
     default:break;
   }
 }  
-  
-}
 
 byte make_trama(byte a,byte b)
 {
   sof_tx      = '#';
   id_trama_tx = a;                // normal = 1, confirm = 2
   estado_tx   = b;               // envia estado q se recibiò
-  sens1_tx    = 1 + sens1_tx;
+  sensor_ph_value  = analogRead(sensor_ph)*(voltaje_ref_ADC/1024);                        //lectura volt sensor
+  sensor_ph_value  = (paso_ph_cal*sensor_ph_value) - (paso_ph_cal*sensor_ph_7_cal) + 7;    //voltaje a pH
+  sens1_tx    = sensor_ph_value*10;
   sens2_tx    = 2;
   sens3_tx    = 3 + sens3_tx;
   sens4_tx    = 4;
@@ -276,7 +295,7 @@ int read_trama()
       contador++;
       arreglo[contador] = Serial.read();                    
     }
-    while(contador < 9);    
+    while(contador < 9);  // largo trama 10  
     if((arreglo[0] == '#') && (arreglo[9] == '%'))
     {
       contador = 0;  
@@ -303,6 +322,7 @@ void loop()
     {
       deco_trama();
       make_trama(2,estado_rx);  //ide_trama 2= trama de confirmacion, se envia el estado_rx recibido a java
+      // Se envia la trama de confirmaciòn con valores, por èstos debieran no considerarse porque lo importante es la confirmaciòn
       send_trama();
     }
     else
@@ -312,29 +332,35 @@ void loop()
     } 
   }
  
-  if(id_trama == 1)
+  switch(id_trama)
   {
-   set_point();
-   id_trama = 0; 
+    case(1): //trama = setpoint
+    { 
+      set_point();  // Etapa de control, fija paràmetros mìnimos o màximos
+      id_trama = 0;
+      break;
+    }
+    case(2): //trama = manual
+    { 
+      set_manual();
+      id_trama = 0; 
+      break;
+    }
+    case(3): //trama = calibraciòn
+    { 
+      set_calibracion(flag_cal);
+      id_trama = 0; 
+      break;
+    }
+    default:break;
   } 
-  if else(id_trama == 2)
-  {
-   set_manual();
-   id_trama = 0; 
-  }
-  if else(id_trama == 3)
-  {
-   set_calibracion(flag_cal);
-   id_trama = 0; 
-  }    
- 
  
   if(aux_timer1 == 1)
   {  
     seconds++;
     if (seconds == 1)   
     {
-      incrementador_tx++;
+      incrementador_tx++;  // Retorna a cero despues de 255
       make_trama(1,incrementador_tx);  // 1 trama normal hacia java cada un segundo 1 second, con incrementador_tx++
       send_trama();
       seconds = 0;
