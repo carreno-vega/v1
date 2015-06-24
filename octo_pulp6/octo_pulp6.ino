@@ -55,18 +55,24 @@ byte  eof_tx;
 byte controlador_ph   = A0;  //Lectura controlador pH 4-20 mA a 1- 5   Volts en entrada analoga A0
 byte controlador_aux  = A1;  //Lectura controlador auxiliar 4-20 mA a 1- 5   Volts en entrada analoga A1
 byte PT100            = A2;  //Lectura controlador auxiliar 4-20 mA a 1- 5   Volts en entrada analoga A1
-byte sensor_ph        = A3; //Lectura sensor PH
-byte sensor_aux       = A4; //Lectura sensor auxiliar
+byte sensor_ph        = A4; //Lectura sensor PH
+byte sensor_aux       = A3; //Lectura sensor auxiliar
 byte ADC_input        = A5; //Lectura ADC
 float voltaje_ref_ADC;  
 /*Variables propias de los sensores*/
 float sensor_ph_value;
 byte flag_ph1;
 byte flag_ph2;
-int sensor_ph_7_cal;
-int sensor_ph_4_cal;
-int paso_ph_cal;
-
+float sensor_ph_7_cal;
+float sensor_ph_4_cal;
+float paso_ph_cal;
+/*variables controlador pH*/
+float controlador_ph_value;
+byte flag_ph1_cont;
+byte flag_ph2_cont;
+float controlador_ph7_cal;
+float controlador_ph4_cal;
+float paso_ph_cont;
 
 void setup()
 {
@@ -85,6 +91,26 @@ void setup()
   
   flag_ph1 = 0;
   flag_ph2 = 0;
+  paso_ph_cal = 20;  //paso inicial referencial, luego en funcion calibracion se toma el valor real del paso de pH 
+  sensor_ph_7_cal = 1; //Valor inicial referencial para el voltaje en ADC para el sensor de pH igual a 7
+  /*
+  50mv/pH referencia
+  1 V offset del sumador
+  el sumador invierte señal sensor pH y suma offset
+  ph7 = 1V, pH4 = 0.85 refencial
+  paso inicial = (7-4)/(1-0.85)
+  paso = 20 pH/volt
+  */
+  
+flag_ph1_cont = 0;
+flag_ph2_cont = 0;
+controlador_ph7_cal = 2.641;
+paso_ph_cont = 3.94;
+/*
+controlador pH
+pH7 - 12 mA - 2.64 V (simulador)
+pH4 - 8.54 mA - 1.88 V (simulador)
+*/
   incrementador_tx  = 0;
   id_trama    = 0;
   estado_tx   = 0;
@@ -215,23 +241,26 @@ byte set_calibracion(byte flag_c)
 {
   switch(flag_c)
   {
-    case(1):  // Calibracion pH
+    case(1):  // Calibracion sensor de pH
     { 
       if(aux1_cal == 1) //calibracion pH4
       {
-        sensor_ph_4_cal = analogRead(sensor_ph)*(voltaje_ref_ADC/1024); //lectura pH4 de bit a milivolts
+        sensor_ph_4_cal = analogRead(sensor_ph) * (voltaje_ref_ADC / 1024); //lectura pH4 de bit a milivolts
         flag_ph1 = 1;
+        digitalWrite(led1,HIGH);
       }
       else if(aux1_cal == 2) //calibracion con pH7
       {
-        sensor_ph_7_cal = analogRead(sensor_ph)*(voltaje_ref_ADC/1024); //lectura pH4 de bit a milivolts
+        sensor_ph_7_cal = analogRead(sensor_ph) * (voltaje_ref_ADC / 1024); //lectura pH4 de bit a milivolts
         flag_ph2 = 1;
+        digitalWrite(led2,HIGH);
       }
       if((flag_ph1 == 1) && (flag_ph2 == 1))
       {
-        paso_ph_cal = ((7-4)/(sensor_ph_7_cal - sensor_ph_4_cal)); // pH/Volt paso para cotrolador y adapatdor de 4-20 mA, voltaje referencia ADC igual a 4.85 Volts
+        paso_ph_cal = ((7 - 4) / (sensor_ph_7_cal - sensor_ph_4_cal)); // pH/Volt paso para cotrolador y adapatdor de 4-20 mA, voltaje referencia ADC igual a 4.85 Volts
         flag_ph1 = 0;
         flag_ph2 = 0;
+        digitalWrite(led3,HIGH);
       }
       
       break;
@@ -240,15 +269,38 @@ byte set_calibracion(byte flag_c)
     { 
       break;
     }
-    case(3):  // Calibracion Temperatura
+    case(3):  // Calibracion Controlador pH 420 (1)
+    { 
+      if(aux1_cal == 3) //calibracion pH4
+      {
+        controlador_ph4_cal = analogRead(controlador_ph) * (voltaje_ref_ADC / 1024); //lectura pH4 de bit a milivolts
+        flag_ph1_cont = 1;
+        digitalWrite(led1,HIGH);
+      }
+      else if(aux1_cal == 4) //calibracion con pH7
+      {
+        controlador_ph7_cal = analogRead(controlador_ph) * (voltaje_ref_ADC / 1024); //lectura pH4 de bit a milivolts
+        flag_ph2_cont = 1;
+        digitalWrite(led2,HIGH);
+      }
+      if((flag_ph1_cont == 1) && (flag_ph2_cont == 1))
+      {
+        paso_ph_cont = ((7 - 4) / (controlador_ph7_cal - controlador_ph4_cal)); // pH/Volt paso para cotrolador y adapatdor de 4-20 mA, voltaje referencia ADC igual a 4.85 Volts
+        flag_ph1_cont = 0;
+        flag_ph2_cont = 0;
+        digitalWrite(led3,HIGH);
+      }
+      break;     
+    }
+    case(4):  // Calibracion Controlador auxiliar 420 (2)
     { 
       break;
     }
-    case(4):  // Calibracion RPM
+    case(5):  // Calibracion PT100
     { 
       break;
     }
-    case(5):  // Calibracion Auxiliar
+     case(6):  // Calibracion auxiliar
     { 
       break;
     }
@@ -260,17 +312,23 @@ byte make_trama(byte a,byte b)
 {
   sof_tx      = '#';
   id_trama_tx = a;                // normal = 1, confirm = 2
-  estado_tx   = b;               // envia estado q se recibiò
-  sensor_ph_value  = analogRead(sensor_ph)*(voltaje_ref_ADC/1024);                        //lectura volt sensor
-  sensor_ph_value  = (paso_ph_cal*sensor_ph_value) - (paso_ph_cal*sensor_ph_7_cal) + 7;    //voltaje a pH
-  sens1_tx    = sensor_ph_value*10;
-  sens2_tx    = 2;
-  sens3_tx    = 3 + sens3_tx;
-  sens4_tx    = 4;
-  sens5_tx    = 5;
-  aux_tx      = 6;
+  estado_tx   = b;               // envia estado q se recibiò o incrementador para trama normal
+  sensor_ph_value  = analogRead(sensor_ph) * (voltaje_ref_ADC / 1024);                        //lectura volt sensor
+  sensor_ph_value  = (paso_ph_cal * sensor_ph_value) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH
+  sens1_tx    = sensor_ph_value*10;                        //Sensor pH
+  sens2_tx    = analogRead(sensor_aux);                    //Sensor OD
+ 
+  controlador_ph_value  = analogRead(controlador_ph) * (voltaje_ref_ADC / 1024);                        //lectura volt sensor
+  controlador_ph_value  = (paso_ph_cont * controlador_ph_value) - (paso_ph_cont * controlador_ph7_cal) + 7;  
+  sens3_tx    = controlador_ph_value*10;                //Sensor 4-20
+ 
+  sens4_tx    = analogRead(controlador_aux);               //Sensor 4-20
+  sens5_tx    = analogRead(PT100);                        //Sensor auxiliar 2
+  aux_tx      = analogRead(ADC_input);                    //Sensor auxiliar 3
   eof_tx      = '%';
 }
+
+
 void send_trama()
 {
   Serial.write(sof_tx);
