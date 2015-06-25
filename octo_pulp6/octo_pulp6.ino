@@ -59,6 +59,13 @@ byte sensor_ph        = A4; //Lectura sensor PH
 byte sensor_aux       = A3; //Lectura sensor auxiliar
 byte ADC_input        = A5; //Lectura ADC
 float voltaje_ref_ADC;  
+/**/
+float sens1_read;
+float sens2_read;
+float sens3_read;
+float sens4_read;
+float sens5_read;
+float sens6_read;
 /*Variables propias de los sensores*/
 float sensor_ph_value;
 byte flag_ph1;
@@ -121,10 +128,18 @@ pH4 - 8.54 mA - 1.88 V (simulador)
   sens2_tx    = 0;
   sens3_tx    = 0;
   /* Inicio del timer1*/
+  //Since Timer1 is 16 bits, it can hold a maximum value of (2^16 – 1) or 65535 a 16MHz.
   cli();          // Desaciva las interrupciones globales
   TCCR1A  = 0;     // pone el regitro TCCR1A entero a 0
   TCCR1B  = 0;     // pone el registro TCCR1B entero a 0
-  OCR1A   = 15624;     //  Comparación cada un seg 15624, 31249 para dos seg,   www.engblaze.com/microcontroller-tutorial-avr-and-arduino-timer-interrupts/
+  OCR1A   = 624;     // configurado para 0.04 seg (25 Hz) 624. configurado para 0.5 seg (7812), Comparación cada un seg 15624, 31249 para dos seg,   www.engblaze.com/microcontroller-tutorial-avr-and-arduino-timer-interrupts/
+  /*
+  we divide our clock source by 1024. This gives us a timer resolution of 1/(16*10^6 / 1024), or 6.4e-5 seconds
+  (# timer counts + 1) = (target time) / (timer resolution)
+  (# timer counts + 1) = (1 s) / (6.4e-5 s)
+  (# timer counts + 1) = 15625
+  (# timer counts) = 15625 - 1 = 15624  El timer1 iguala este valor para activar la interrupecion, para 1 seg es 15624
+  */
   TCCR1B |= (1 << WGM12);
   TCCR1B |= (1 << CS10);
   TCCR1B |= (1 << CS12);
@@ -179,7 +194,7 @@ int deco_trama()
 
 void set_point()
 {
-  
+
 }
 void set_manual()
 {
@@ -308,23 +323,39 @@ byte set_calibracion(byte flag_c)
   }
 }  
 
+void lectura_sensores()
+{
+  sens1_read = analogRead(sensor_ph);
+  Serial.println(sens1_read);
+  //delay(10);
+  /*sens2_read = analogRead(sensor_aux);
+  delay(10);
+  sens3_read = analogRead(controlador_ph);
+  delay(10);
+  sens4_read = analogRead(controlador_aux);               //Sensor 4-20
+  delay(10);
+  sens5_read = analogRead(PT100);                        //Sensor auxiliar 2
+  delay(10);
+  sens6_read = analogRead(ADC_input);                    //Sensor auxiliar 3*/
+}
+void procesar_datos()
+{
+  sensor_ph_value         = sens1_read * (voltaje_ref_ADC / 1024);
+  sensor_ph_value         = (paso_ph_cal * sensor_ph_value) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH                                                   // decimas a entero para enviar como (byte)
+  controlador_ph_value    = sens3_read * (voltaje_ref_ADC / 1024); 
+  controlador_ph_value    = (paso_ph_cont * controlador_ph_value) - (paso_ph_cont * controlador_ph7_cal) + 7;  
+}
 byte make_trama(byte a,byte b)
 {
   sof_tx      = '#';
-  id_trama_tx = a;                // normal = 1, confirm = 2
-  estado_tx   = b;               // envia estado q se recibiò o incrementador para trama normal
-  sensor_ph_value  = analogRead(sensor_ph) * (voltaje_ref_ADC / 1024);                        //lectura volt sensor
-  sensor_ph_value  = (paso_ph_cal * sensor_ph_value) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH
-  sens1_tx    = sensor_ph_value*10;                        //Sensor pH
-  sens2_tx    = analogRead(sensor_aux);                    //Sensor OD
- 
-  controlador_ph_value  = analogRead(controlador_ph) * (voltaje_ref_ADC / 1024);                        //lectura volt sensor
-  controlador_ph_value  = (paso_ph_cont * controlador_ph_value) - (paso_ph_cont * controlador_ph7_cal) + 7;  
-  sens3_tx    = controlador_ph_value*10;                //Sensor 4-20
- 
-  sens4_tx    = analogRead(controlador_aux);               //Sensor 4-20
-  sens5_tx    = analogRead(PT100);                        //Sensor auxiliar 2
-  aux_tx      = analogRead(ADC_input);                    //Sensor auxiliar 3
+  id_trama_tx = a;                          // normal = 1, confirm = 2
+  estado_tx   = b;                          // envia estado q se recibiò o incrementador para trama normal
+  sens1_tx    = sensor_ph_value * 10; 
+  sens2_tx    = 0;
+  sens3_tx    = controlador_ph_value * 10;  // decimas a entero para enviar como (byte)
+  sens4_tx    = 0;
+  sens5_tx    = 0;
+  aux_tx      = 0;
   eof_tx      = '%';
 }
 
@@ -369,7 +400,7 @@ int read_trama()
 /*Interrupcion Timer*/
 ISR(TIMER1_COMPA_vect)   //Flag correspondiente a timer1 comparacion
 {                        
-    aux_timer1=1;     
+    aux_timer1 = 1;     
 }
 
 void loop()
@@ -394,7 +425,7 @@ void loop()
   {
     case(1): //trama = setpoint
     { 
-      set_point();  // Etapa de control, fija paràmetros mìnimos o màximos
+      //set_point();  // Etapa de control, fija paràmetros mìnimos o màximos
       id_trama = 0;
       break;
     }
@@ -412,11 +443,16 @@ void loop()
     }
     default:break;
   } 
+  
+  
  
-  if(aux_timer1 == 1)
+  if(aux_timer1 == 1) // 0.5seg * 2 = 1 seg
   {  
-    seconds++;
-    if (seconds == 1)   
+   // seconds++;
+    lectura_sensores();
+    //procesar_datos();
+    
+    if(seconds == 10)
     {
       incrementador_tx++;  // Retorna a cero despues de 255
       make_trama(1,incrementador_tx);  // 1 trama normal hacia java cada un segundo 1 second, con incrementador_tx++
@@ -425,7 +461,6 @@ void loop()
     }
     aux_timer1 = 0;
   }
-  delay(100);
 }  
 
 
