@@ -7,6 +7,7 @@ int  led = 8;
 int  led1 = 9;
 int  led2 = 10;
 int  led3 = 11;
+int ppal = 0;
 
 /*id_trama enviada incrementa cada 1 seg*/
 byte incrementador_tx; // incrementador de timer enviado hacia java
@@ -80,9 +81,66 @@ byte flag_ph2_cont;
 float controlador_ph7_cal;
 float controlador_ph4_cal;
 float paso_ph_cont;
+/*Variables Filtro Butter para sensor pH*/
+double ACoef[5];
+double BCoef[5];
+int NCoef;
+
+double y[5]; //output samples
+double x[5]; //input samples
+int n;
+
+float promedio = 0;
+int suma = 0;
+byte arreglo_ph[42];
 
 void setup()
 {
+  for (int h = 0; h < 42; h++)
+  {
+    arreglo_ph[h] = 0;
+  }
+  
+   NCoef = 4;
+    /* 
+   ACoef[0] = 0.000000374;
+   ACoef[1] = 0.0000001496;
+   ACoef[2] = 0.0000002244;
+   ACoef[3] = 0.0000001496;
+   ACoef[4] = 0.0000000374;
+   
+   BCoef[0] = 1;
+   BCoef[1] = -3.8687;
+   BCoef[2] = 5.6145;
+   BCoef[3] = -3.6228;
+   BCoef[4] = 0.8769;
+   */
+   ACoef[0] = 0.0466 ;
+   ACoef[1] = 0.1863;
+   ACoef[2] = 0.2795 ;
+   ACoef[3] = 0.1863;
+   ACoef[4] = 0.0466;
+   
+   BCoef[0] =  1.0000;
+   BCoef[1] = -0.7821;
+   BCoef[2] =  0.6800;
+   BCoef[3] = -0.1827;
+   BCoef[4] =  0.0301; 
+   
+   x[0] = 0;
+   x[1] = 0;
+   x[2] = 0;
+   x[3] = 0;
+   x[4] = 0;
+   
+   y[0] = 0;
+   y[1] = 0;
+   y[2] = 0;
+   y[3] = 0;
+   y[4] = 0;
+   
+   
+   
   Serial.begin(9600);
   pinMode(led, OUTPUT);
   pinMode(led1, OUTPUT);
@@ -146,6 +204,31 @@ pH4 - 8.54 mA - 1.88 V (simulador)
   TIMSK1 |= (1 << OCIE1A);  //datasheet 32U4 
   sei();
 }
+
+double iir(float NewSample) 
+{
+  
+  for(n=NCoef; n>0; n--) 
+  {
+      x[n] = x[n-1];
+      y[n] = y[n-1];
+   }
+   
+   //Calculate the new output
+   x[0] = NewSample;
+   y[0] = ACoef[0] * x[0];
+   
+   for(n=1; n<=NCoef; n++)
+   {
+     y[0] += (ACoef[n] * x[n]) - (BCoef[n] * y[n]);
+   }
+   
+   Serial.print(NewSample);
+   Serial.print(",");
+   Serial.println(y[0],7);
+   return y[0];
+}
+
 int deco_trama()
 {
 /* ID TRAMA
@@ -325,18 +408,41 @@ byte set_calibracion(byte flag_c)
 
 void lectura_sensores()
 {
-  sens1_read = analogRead(sensor_ph);
-  Serial.println(sens1_read);
-  //delay(10);
-  /*sens2_read = analogRead(sensor_aux);
-  delay(10);
-  sens3_read = analogRead(controlador_ph);
-  delay(10);
-  sens4_read = analogRead(controlador_aux);               //Sensor 4-20
-  delay(10);
-  sens5_read = analogRead(PT100);                        //Sensor auxiliar 2
-  delay(10);
-  sens6_read = analogRead(ADC_input);                    //Sensor auxiliar 3*/
+  swtich(aux_timer1)
+  {
+    case(1):
+    {
+      sens1_read = analogRead(sensor_ph);
+      break;
+    }
+    case(2):
+    {
+      sens2_read = analogRead(sensor_aux);
+      break;
+    }
+    case(3):
+    {
+      sens3_read = analogRead(controlador_ph);
+      break;
+    }
+    case(4):
+    {
+      sens4_read = analogRead(controlador_aux);               //Sensor 4-20
+      break;
+    }
+    case(5):
+    {
+      sens5_read = analogRead(PT100);                        //Sensor auxiliar 2
+      break;
+    }
+    case(6):
+    {
+      sens6_read = analogRead(ADC_input);                    //Sensor auxiliar 3
+      break;
+    }
+  default:break;
+  }
+  
 }
 void procesar_datos()
 {
@@ -344,6 +450,27 @@ void procesar_datos()
   sensor_ph_value         = (paso_ph_cal * sensor_ph_value) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH                                                   // decimas a entero para enviar como (byte)
   controlador_ph_value    = sens3_read * (voltaje_ref_ADC / 1024); 
   controlador_ph_value    = (paso_ph_cont * controlador_ph_value) - (paso_ph_cont * controlador_ph7_cal) + 7;  
+  
+    //shift the old samples
+    arreglo_ph[0] = sens1_read;
+    
+    for(int g = 42; g > 0; g--) 
+    {
+       arreglo_ph[g] = arreglo_ph[g-1];
+    }
+
+    for (int g = 0; g < 42; g++)
+    {
+        suma = suma + arreglo_ph[g];
+    }
+    
+    promedio = suma / 42;
+    
+    Serial.print(sens1_read,4);
+    Serial.print(",");
+    Serial.println(promedio,4);;
+    suma = 0;
+
 }
 byte make_trama(byte a,byte b)
 {
@@ -447,12 +574,18 @@ void loop()
   
  
   if(aux_timer1 == 1) // 0.5seg * 2 = 1 seg
-  {  
-   // seconds++;
+  { 
+    seconds++;
     lectura_sensores();
-    //procesar_datos();
+  //  sens2_read = iir(sens1_read);
+  //  Serial.print(sens1_read);
+  //  Serial.print(",");
+  //  Serial.println(sens2_read);
+    procesar_datos();
+  
+  //Serial.println(sens1_read);
     
-    if(seconds == 10)
+    if(seconds == 250)  // envio cada 10 seg
     {
       incrementador_tx++;  // Retorna a cero despues de 255
       make_trama(1,incrementador_tx);  // 1 trama normal hacia java cada un segundo 1 second, con incrementador_tx++
