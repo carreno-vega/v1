@@ -7,8 +7,7 @@ int  led = 8;
 int  led1 = 9;
 int  led2 = 10;
 int  led3 = 11;
-int ppal = 0;
-
+byte timer_lectura;
 /*id_trama enviada incrementa cada 1 seg*/
 byte incrementador_tx; // incrementador de timer enviado hacia java
 /*Timer1*/
@@ -90,13 +89,13 @@ double y[5]; //output samples
 double x[5]; //input samples
 int n;
 
-float promedio = 0;
-int suma = 0;
-byte arreglo_ph[42];
+float promedio_ph = 0;
+int suma_ph = 0;
+byte arreglo_ph[150];
 
 void setup()
 {
-  for (int h = 0; h < 42; h++)
+  for (int h = 0; h < 150; h++)
   {
     arreglo_ph[h] = 0;
   }
@@ -190,7 +189,7 @@ pH4 - 8.54 mA - 1.88 V (simulador)
   cli();          // Desaciva las interrupciones globales
   TCCR1A  = 0;     // pone el regitro TCCR1A entero a 0
   TCCR1B  = 0;     // pone el registro TCCR1B entero a 0
-  OCR1A   = 624;     // configurado para 0.04 seg (25 Hz) 624. configurado para 0.5 seg (7812), Comparación cada un seg 15624, 31249 para dos seg,   www.engblaze.com/microcontroller-tutorial-avr-and-arduino-timer-interrupts/
+  OCR1A   = 124;     // configurado para 0.008 seg (125 Hz) OCR1A = 124, Comparación cada un seg 15624,   www.engblaze.com/microcontroller-tutorial-avr-and-arduino-timer-interrupts/
   /*
   we divide our clock source by 1024. This gives us a timer resolution of 1/(16*10^6 / 1024), or 6.4e-5 seconds
   (# timer counts + 1) = (target time) / (timer resolution)
@@ -277,6 +276,7 @@ int deco_trama()
 
 void set_point()
 {
+  
 
 }
 void set_manual()
@@ -408,7 +408,7 @@ byte set_calibracion(byte flag_c)
 
 void lectura_sensores()
 {
-  swtich(aux_timer1)
+  switch(timer_lectura) //lectura de un sensor cada 0.008 (s), equivale a un tiempo de lectura = 0.048 (s) x sensor.
   {
     case(1):
     {
@@ -438,6 +438,7 @@ void lectura_sensores()
     case(6):
     {
       sens6_read = analogRead(ADC_input);                    //Sensor auxiliar 3
+      timer_lectura = 0;
       break;
     }
   default:break;
@@ -454,22 +455,22 @@ void procesar_datos()
     //shift the old samples
     arreglo_ph[0] = sens1_read;
     
-    for(int g = 42; g > 0; g--) 
+    for(int g = 150; g > 0; g--)   //a 0.048 seg por muestra el arreglo 7.2 (s)//rellenar arreglo utilizando incrementador seconds (sugerencia no validada)
     {
        arreglo_ph[g] = arreglo_ph[g-1];
     }
 
-    for (int g = 0; g < 42; g++)
+    for (int g = 0; g < 150; g++)
     {
-        suma = suma + arreglo_ph[g];
+        suma_ph = suma_ph + arreglo_ph[g];
     }
     
-    promedio = suma / 42;
+    promedio_ph = suma_ph / 150;
     
     Serial.print(sens1_read,4);
     Serial.print(",");
-    Serial.println(promedio,4);;
-    suma = 0;
+    Serial.println(promedio_ph,4);;
+    suma_ph = 0;
 
 }
 byte make_trama(byte a,byte b)
@@ -553,6 +554,15 @@ void loop()
     case(1): //trama = setpoint
     { 
       //set_point();  // Etapa de control, fija paràmetros mìnimos o màximos
+       //  Control pH y temperatura
+     if (promedio_ph <= ph_sp)
+     {
+       digitalWrite(led3,HIGH);
+     }
+     else if(promedio_ph >= (ph_sp+0.2))
+     {
+       digitalWrite(led3,LOW);
+     }
       id_trama = 0;
       break;
     }
@@ -571,21 +581,19 @@ void loop()
     default:break;
   } 
   
-  
+
  
+  
   if(aux_timer1 == 1) // 0.5seg * 2 = 1 seg
   { 
-    seconds++;
+    seconds++;             //aumenta cada 0.008 (s)
+    timer_lectura++;      //timer de lectura de sensores aumenta cada 8 (ms)
     lectura_sensores();
-  //  sens2_read = iir(sens1_read);
-  //  Serial.print(sens1_read);
-  //  Serial.print(",");
-  //  Serial.println(sens2_read);
     procesar_datos();
   
   //Serial.println(sens1_read);
     
-    if(seconds == 250)  // envio cada 10 seg
+    if(seconds == 1250)  // 10seg / 0.008 seg = 1250, envio cada 10 seg
     {
       incrementador_tx++;  // Retorna a cero despues de 255
       make_trama(1,incrementador_tx);  // 1 trama normal hacia java cada un segundo 1 second, con incrementador_tx++
