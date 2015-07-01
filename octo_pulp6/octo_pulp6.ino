@@ -101,6 +101,13 @@ int suma_cont_aux;
 int arreglo_ph[100];
 int arreglo_temp[100];
 int arreglo_cont_aux[100];
+
+/* Varibales identificador sensor o actuador*/
+byte ph_sens_or_cont;    //aux2_sp primer BIT 0 para sensor pH y 1 para controlador pH 
+byte OD_sens_or_cont;    //aux2_sp segund BIT 0 para sensor OD y 1 para controlador OD
+byte temp_sens_or_cont;  //aux2_sp tercer BIT 0 para sensor Temperatura y 1 para controlador Temperatura
+byte rpm_sens_or_cont;   //aux2_sp cuarto BIT 0 para sensor RPM y 1 para controlador RPM
+byte aux1_sens_or_cont;  //aux2_sp quinto BIT 0 para sensor auxiliar_1 y 1 para controlador auxiliar_1.  
 void setup()
 {
   for (int h = 0; h < 100; h++)
@@ -266,8 +273,13 @@ int deco_trama()
       temp_sp     = arreglo[5];  
       rpm_sp      = arreglo[6];  
       aux1_sp     = arreglo[7]; 
-      aux2_sp     = arreglo[8];       
-      break;
+      aux2_sp     = arreglo[8]; 
+      ph_sens_or_cont   = bitRead(aux2_sp, 0);   //aux2_sp primer BIT 0 para sensor pH y 1 para controlador pH 
+      OD_sens_or_cont   = bitRead(aux2_sp, 1);  //aux2_sp segund BIT 0 para sensor OD y 1 para controlador OD
+      temp_sens_or_cont = bitRead(aux2_sp, 2);   //aux2_sp tercer BIT 0 para sensor Temperatura y 1 para controlador Temperatura
+      rpm_sens_or_cont  = bitRead(aux2_sp, 3);   //aux2_sp cuarto BIT 0 para sensor RPM y 1 para controlador RPM
+      aux1_sens_or_cont  = bitRead(aux2_sp, 4);  //aux2_sp quinto BIT 0 para sensor auxiliar_1 y 1 para controlador auxiliar_1.  
+      break;                     
     }
     case(2): //trama = manual
     { 
@@ -626,30 +638,50 @@ void loop()
     default:break;
   } 
   /*------------Control ON/OFF de variables-----------------*/
-  // Si id_trama = control (1) && (1seg / 0.01 seg) = 100, condicion if cada 1 seg.
+  // Si id_trama(1) = control  && (1seg / 0.01 seg) = 100, condicion if cada 1 seg.
   /*-Solo se tendra estado manual o automatico, no se podra tener una variable con control automatico y otra con control manual*/
   if(id_trama == 1 && timer_control >= 100)   
   {
-    if (promedio_ph <= ph_sp)
-     {
-       digitalWrite(led3,HIGH);
-     }
-     else if(promedio_ph >= (ph_sp + 0.2))  //histeresis de 0.2 ph hacia arriba
-     {
-       digitalWrite(led3,LOW);
-     }
-     
-     if (promedio_temp <= (temp_sp - 1.5))  // histeresis entre set pont -0.3 y set point - 0.1.
-     {
-       digitalWrite(led,HIGH);
-     }
-     else if(promedio_temp >= (temp_sp - 0.5)) // por retardo de proceso, se apaga antes el calentador
-     {
-       digitalWrite(led,LOW);
-     }
+    switch(ph_sens_or_cont)
+    {
+      case(1): //para sensor de pH
+      {
+        if (sensor_ph_value <= ph_sp)
+        {
+          digitalWrite(led3,HIGH);
+        }
+        else if(sensor_ph_value >= (ph_sp + 0.2))  //histeresis de 0.2 ph hacia arriba
+        {
+          digitalWrite(led3,LOW);
+        }
+        break;
+      }
+      case(2): //para controlador de pH
+      {
+          if (controlador_ph_value <= ph_sp)
+        {
+          digitalWrite(led3,HIGH);
+        }
+        else if(controlador_ph_value >= (ph_sp + 0.2))  //histeresis de 0.2 ph hacia arriba
+        {
+          digitalWrite(led3,LOW);
+        }
+        break;
+      }
+      default:break;
+    }
+    if (promedio_temp <= (temp_sp - 1.5))  // histeresis entre set point -0.3 y set point - 0.1.
+    {
+      digitalWrite(led,HIGH);
+    }
+    else if(promedio_temp >= (temp_sp - 0.5)) // por retardo de proceso, se apaga antes el calentador
+    {
+      digitalWrite(led,LOW);
+    }
      timer_control = 0;
   } 
   
+  /*- Periodo de ejecucion funciones -*/
   if(aux_timer1 == 1) // cada 10 (ms) 
   { 
     seconds++;             //aumenta cada 10 (ms) (s)
@@ -668,6 +700,7 @@ void loop()
     seconds = 0;
   } 
 }
+
   
 
 
