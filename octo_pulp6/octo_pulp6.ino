@@ -10,6 +10,9 @@ int  led3 = 11;
 /*Variables timer*/
 byte timer_lectura;
 int timer_control;
+byte milisegundos;
+byte segundos;
+byte minutos;
 /*id_trama enviada incrementa cada 1 seg*/
 byte incrementador_tx; // incrementador de timer enviado hacia java
 /*Timer1*/
@@ -192,6 +195,9 @@ void setup()
    timer_control = 0;          //timer de control de variables
    timer_lectura = 0;          //timer de lectura de datos
    timer_loop = 0;             //timer loop
+   milisegundos = 0;
+   segundos = 0;               //segundos incrementandose hasta el minuto segundos == 60
+   minutos = 0;                //minutos incrementandose hasta la hora minutos == 60, para comparar con tiempo de ejecucion de setpoint.
    /*
    controlador pH
    pH7 - 12 mA - 2.64 V (simulador)
@@ -275,8 +281,12 @@ int deco_trama()
       od_sp       = arreglo[4];  
       temp_sp     = arreglo[5];  
       rpm_sp      = arreglo[6];  
-      aux1_sp     = arreglo[7]; 
-      aux2_sp     = arreglo[8]; 
+      aux1_sp     = arreglo[7];     //tiempo en minutos para ejecucion de trama especial set point solo para case(1) y case(2).
+      aux2_sp     = arreglo[8];     //Tipo de set poin, 1 = , 2 = , 3= Setpoint manual
+     
+      segundos  = 0;                 //Llega trama de set_point
+      minutos   = 0;                 //tiempo se resetea.
+      
 /*      ph_sens_or_cont    = bitRead(aux2_sp, 0);   //aux2_sp primer BIT 0 para sensor pH y 1 para controlador pH 
       OD_sens_or_cont    = bitRead(aux2_sp, 1);   //aux2_sp segund BIT 0 para sensor OD y 1 para controlador OD
       temp_sens_or_cont  = bitRead(aux2_sp, 2);   //aux2_sp tercer BIT 0 para sensor Temperatura y 1 para controlador Temperatura
@@ -362,6 +372,36 @@ void set_manual()
       break;
     }
     default:break;
+  }
+}
+
+void set_point()
+{
+  if (sensor_ph_value <= ph_sp)
+  {
+    digitalWrite(led3,HIGH);
+  }
+  else if(sensor_ph_value >= (ph_sp + 0.2))  //histeresis de 0.2 ph hacia arriba
+  {
+    digitalWrite(led3,LOW);
+  }
+  
+  if (controlador_ph_value <= ph_sp)
+  {
+    digitalWrite(led2,HIGH);
+  }
+  else if(controlador_ph_value >= (ph_sp + 0.2))  //histeresis de 0.2 ph hacia arriba
+  {
+    digitalWrite(led2,LOW);
+  }
+  
+  if (promedio_temp <= (temp_sp - 1.5))  // histeresis entre set point -0.3 y set point - 0.1.
+  {
+    digitalWrite(led,HIGH);
+  }
+  else if(promedio_temp >= (temp_sp - 0.5)) // por retardo de proceso, se apaga antes el calentador
+  {
+    digitalWrite(led,LOW);
   }
 }
 
@@ -478,6 +518,14 @@ void lectura_sensores()
   }
 }
 
+void actuadores_off() // Funcion para apagar los 4 actuadores
+{
+  digitalWrite(led,LOW);
+  digitalWrite(led1,LOW);
+  digitalWrite(led2,LOW);
+  digitalWrite(led3,LOW); 
+}
+
 void procesar_datos(int canal)
 {
   switch (canal)
@@ -543,8 +591,6 @@ void procesar_datos(int canal)
   }
 }
 
-
-
 byte make_trama(byte a,byte b)
 {
   sof_tx      = '#';
@@ -597,6 +643,7 @@ int read_trama()
     }
   } 
 }
+
 /*Interrupcion Timer*/
 ISR(TIMER1_COMPA_vect)   //Flag correspondiente a timer1 comparacion
 {                        
@@ -625,10 +672,6 @@ void loop()
     
     switch(id_trama)
     {
-      /*case(1): //trama = setpoint
-      { 
-  
-      }*/
       case(2): //trama = manual
       { 
         set_manual();
@@ -644,13 +687,7 @@ void loop()
       default:break;
     } 
     timer_loop = 0;
-  }
-
-    /*------------Control ON/OFF de variables-----------------*/
-    // Si id_trama(1) = control  && (1seg / 0.01 seg) = 100, condicion if cada 1 seg.
-    /*-Solo se tendra estado manual o automatico, no se podra tener una variable con control automatico y otra con control manual*/
-    
- 
+  } 
  
   //Serial.println(sens1_read);
   if(seconds == 600)  // (6 / 0.01 seg) = 600, condicion if cada 6 seg
@@ -660,51 +697,73 @@ void loop()
     send_trama();
     seconds = 0;
     
+    /*------------Control ON/OFF de variables - Trama SETPOINT-----------------*/
+    // Si id_trama(1) = control  && (1seg / 0.01 seg) = 100, condicion if cada 1 seg.
+    /*-Solo se tendra estado manual o automatico, no se podra tener una variable con control automatico y otra con control manual*/
     
     if(id_trama == 1)   
     { 
-      if (sensor_ph_value >= ph_sp)
+      switch(aux2_sp)
       {
-        digitalWrite(led3,HIGH);
-      }
-      else if(sensor_ph_value <= (ph_sp + 0.2))  //histeresis de 0.2 ph hacia arriba
-      {
-        digitalWrite(led3,LOW);
-      }
-      
-      if (controlador_ph_value >= ph_sp)
-      {
-        digitalWrite(led2,HIGH);
-      }
-      else if(controlador_ph_value <= (ph_sp + 0.2))  //histeresis de 0.2 ph hacia arriba
-      {
-        digitalWrite(led2,LOW);
-      }
-        
-      if (promedio_temp <= (temp_sp - 1.5))  // histeresis entre set point -0.3 y set point - 0.1.
-      {
-        digitalWrite(led,HIGH);
-      }
-      else if(promedio_temp >= (temp_sp - 0.5)) // por retardo de proceso, se apaga antes el calentador
-      {
-        digitalWrite(led,LOW);
-      }
-      timer_control = 0;
+        case(1):
+        {
+          if(aux1_sp >= minutos)
+          {
+            set_point();
+          }
+          else if(aux1_sp <= minutos)
+          {
+            minutos = 0;
+            actuadores_off();
+          }         
+          break;
+        }
+        case(2):
+        {
+          if(aux1_sp >= minutos)
+          {
+            minutos = 0;
+            set_point();
+          } 
+          else if(aux1_sp <= minutos)
+          {
+            actuadores_off();
+          }  
+          break;
+        }
+        case(3):
+        {
+          set_point();
+          break;
+        }default:break;
+      } 
     } 
-    
   }
-     
+  
   /*- Periodo de ejecucion funciones -*/
   if(aux_timer1 == 1) // cada 10 (ms) 
   { 
     seconds++;             //aumenta cada 10 (ms)
+    milisegundos++;        //aumenta cada 10 (ms)
     timer_lectura++;      //timer de lectura de sensores aumenta cada 10 (ms)
-    //timer_control++;
     timer_loop++;
     lectura_sensores();  // se llama procesar_datos() desde lectura_sensores() 
     aux_timer1 = 0;       
   }
-}
+  
+  if(milisegundos == 100) // 10 (ms) * 100
+  {
+    milisegundos = 0;
+    segundos++;
+  } 
+  if(segundos == 60)
+  {
+    segundos = 0;
+    minutos++;
+  }
+
+
+} //<- final loop
 
   
 
