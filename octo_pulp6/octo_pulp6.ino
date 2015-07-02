@@ -15,8 +15,9 @@ byte incrementador_tx; // incrementador de timer enviado hacia java
 /*Timer1*/
 int  aux_timer1; 
 int  seconds;
+int timer_loop;
 /*Buffer de trama recibida*/
-int  arreglo[10];
+float  arreglo[10];
 int  contador;
 /*Identificadores de trama*/
 byte  id_trama;
@@ -108,6 +109,7 @@ byte OD_sens_or_cont;    //aux2_sp segund BIT 0 para sensor OD y 1 para controla
 byte temp_sens_or_cont;  //aux2_sp tercer BIT 0 para sensor Temperatura y 1 para controlador Temperatura
 byte rpm_sens_or_cont;   //aux2_sp cuarto BIT 0 para sensor RPM y 1 para controlador RPM
 byte aux1_sens_or_cont;  //aux2_sp quinto BIT 0 para sensor auxiliar_1 y 1 para controlador auxiliar_1.  
+
 void setup()
 {
   for (int h = 0; h < 100; h++)
@@ -189,6 +191,7 @@ void setup()
    /*Variables timer*/
    timer_control = 0;          //timer de control de variables
    timer_lectura = 0;          //timer de lectura de datos
+   timer_loop = 0;             //timer loop
    /*
    controlador pH
    pH7 - 12 mA - 2.64 V (simulador)
@@ -274,11 +277,12 @@ int deco_trama()
       rpm_sp      = arreglo[6];  
       aux1_sp     = arreglo[7]; 
       aux2_sp     = arreglo[8]; 
-      ph_sens_or_cont   = bitRead(aux2_sp, 0);   //aux2_sp primer BIT 0 para sensor pH y 1 para controlador pH 
-      OD_sens_or_cont   = bitRead(aux2_sp, 1);  //aux2_sp segund BIT 0 para sensor OD y 1 para controlador OD
-      temp_sens_or_cont = bitRead(aux2_sp, 2);   //aux2_sp tercer BIT 0 para sensor Temperatura y 1 para controlador Temperatura
-      rpm_sens_or_cont  = bitRead(aux2_sp, 3);   //aux2_sp cuarto BIT 0 para sensor RPM y 1 para controlador RPM
-      aux1_sens_or_cont  = bitRead(aux2_sp, 4);  //aux2_sp quinto BIT 0 para sensor auxiliar_1 y 1 para controlador auxiliar_1.  
+/*      ph_sens_or_cont    = bitRead(aux2_sp, 0);   //aux2_sp primer BIT 0 para sensor pH y 1 para controlador pH 
+      OD_sens_or_cont    = bitRead(aux2_sp, 1);   //aux2_sp segund BIT 0 para sensor OD y 1 para controlador OD
+      temp_sens_or_cont  = bitRead(aux2_sp, 2);   //aux2_sp tercer BIT 0 para sensor Temperatura y 1 para controlador Temperatura
+      rpm_sens_or_cont   = bitRead(aux2_sp, 3);   //aux2_sp cuarto BIT 0 para sensor RPM y 1 para controlador RPM
+      aux1_sens_or_cont  = bitRead(aux2_sp, 4);   //aux2_sp quinto BIT 0 para sensor auxiliar_1 y 1 para controlador auxiliar_1.  
+      */
       break;                     
     }
     case(2): //trama = manual
@@ -478,7 +482,7 @@ void procesar_datos(int canal)
 {
   switch (canal)
   {
-    case(1):  // CANAL ADC DE PH
+    case(1):  // CANAL ADC DE sensor PH
     {
       //shift the old samples
       for(int g = 100; g > 0; g--)   //a 0.06 seg por muestra el arreglo para 100 muestras se llena en 6 (s)//rellenar arreglo utilizando incrementador seconds (sugerencia no validada)
@@ -519,7 +523,7 @@ void procesar_datos(int canal)
     case(4):
     {
       //shift the old samples
-      for(int g = 100; g > 0; g--)   //a 0.06 seg por muestra el arreglo para 100 muestras se llena en 6 (s)//rellenar arreglo utilizando incrementador seconds (sugerencia no validada)
+      for(int g = 100; g > 0; g--)   //a 0.06 seg por muestra el arreglo para 100 muestras se llena en 6 (s)//rellenar arreglo utilizando incrementador para no entrar en for (sugerencia no validada)
       {
          arreglo_cont_aux[g] = arreglo_cont_aux[g-1];    //arreglo controlador auxiliar
       }
@@ -529,8 +533,8 @@ void procesar_datos(int canal)
       {
           suma_cont_aux = suma_cont_aux + arreglo_cont_aux[g];
       }
-      promedio_cont_aux = suma_cont_aux / 100;
-      suma_cont_aux = 0;   
+      promedio_cont_aux       = suma_cont_aux / 100;
+      suma_cont_aux           = 0;   
       controlador_ph_value    = promedio_cont_aux * (voltaje_ref_ADC / 1024);              //controlador pH conectado en adc 4 que corresponde a controlador auxiliar
       controlador_ph_value    = (paso_ph_cont * controlador_ph_value) - (paso_ph_cont * controlador_ph7_cal) + 7;  
       break;
@@ -546,7 +550,7 @@ byte make_trama(byte a,byte b)
   sof_tx      = '#';
   id_trama_tx = a;                          // normal = 1, confirm = 2
   estado_tx   = b;                          // envia estado q se recibiò o incrementador para trama normal
-  sens1_tx    = sensor_ph_value * 10; 
+  sens1_tx    = sensor_ph_value * 10;       // decimas a entero para enviar como (byte)
   sens2_tx    = 0;
   sens3_tx    = controlador_ph_value * 10;  // decimas a entero para enviar como (byte)
   sens4_tx    = 0;
@@ -601,104 +605,105 @@ ISR(TIMER1_COMPA_vect)   //Flag correspondiente a timer1 comparacion
 
 void loop()
 {
-  if (Serial.available() > 0)
-  {   
-    if(read_trama())
-    {
-      deco_trama();
-      make_trama(2,estado_rx);  //ide_trama 2= trama de confirmacion, se envia el estado_rx recibido a java
-      // Se envia la trama de confirmaciòn con valores, por èstos debieran no considerarse porque lo importante es la confirmaciòn
-      send_trama();
-    }
-    else
-    {
-      make_trama(3,0);   // id_trama = 3 hacia java = error de trama
-      send_trama(); 
-    } 
-  }
- 
-  switch(id_trama)
+  if(timer_loop == 10)
   {
-    /*case(1): //trama = setpoint
-    { 
-
-    }*/
-    case(2): //trama = manual
-    { 
-      set_manual();
-      id_trama = 0; 
-      break;
-    }
-    case(3): //trama = calibraciòn
-    { 
-      set_calibracion(flag_cal);
-      id_trama = 0; 
-      break;
-    }
-    default:break;
-  } 
-  /*------------Control ON/OFF de variables-----------------*/
-  // Si id_trama(1) = control  && (1seg / 0.01 seg) = 100, condicion if cada 1 seg.
-  /*-Solo se tendra estado manual o automatico, no se podra tener una variable con control automatico y otra con control manual*/
-  if(id_trama == 1 && timer_control >= 100)   
-  {
-    switch(ph_sens_or_cont)
-    {
-      case(1): //para sensor de pH
+    if (Serial.available() > 0)
+    {   
+      if(read_trama())
       {
-        if (sensor_ph_value <= ph_sp)
-        {
-          digitalWrite(led3,HIGH);
-        }
-        else if(sensor_ph_value >= (ph_sp + 0.2))  //histeresis de 0.2 ph hacia arriba
-        {
-          digitalWrite(led3,LOW);
-        }
+        deco_trama();
+        make_trama(2,estado_rx);  //ide_trama 2= trama de confirmacion, se envia el estado_rx recibido a java
+        // Se envia la trama de confirmaciòn con valores, por èstos debieran no considerarse porque lo importante es la confirmaciòn
+        send_trama();
+      }
+      else
+      {
+        make_trama(3,0);   // id_trama = 3 hacia java = error de trama
+        send_trama(); 
+      } 
+    }
+    
+    switch(id_trama)
+    {
+      /*case(1): //trama = setpoint
+      { 
+  
+      }*/
+      case(2): //trama = manual
+      { 
+        set_manual();
+        id_trama = 0; 
         break;
       }
-      case(2): //para controlador de pH
-      {
-          if (controlador_ph_value <= ph_sp)
-        {
-          digitalWrite(led3,HIGH);
-        }
-        else if(controlador_ph_value >= (ph_sp + 0.2))  //histeresis de 0.2 ph hacia arriba
-        {
-          digitalWrite(led3,LOW);
-        }
+      case(3): //trama = calibraciòn
+      { 
+        set_calibracion(flag_cal);
+        id_trama = 0; 
         break;
       }
       default:break;
-    }
-    if (promedio_temp <= (temp_sp - 1.5))  // histeresis entre set point -0.3 y set point - 0.1.
-    {
-      digitalWrite(led,HIGH);
-    }
-    else if(promedio_temp >= (temp_sp - 0.5)) // por retardo de proceso, se apaga antes el calentador
-    {
-      digitalWrite(led,LOW);
-    }
-     timer_control = 0;
-  } 
-  
-  /*- Periodo de ejecucion funciones -*/
-  if(aux_timer1 == 1) // cada 10 (ms) 
-  { 
-    seconds++;             //aumenta cada 10 (ms) (s)
-    timer_lectura++;      //timer de lectura de sensores aumenta cada 10 (ms)
-    timer_control++;
-    lectura_sensores();  // se llama procesar_datos() desde lectura_sensores() 
-    aux_timer1 = 0;       
+    } 
+    timer_loop = 0;
   }
 
+    /*------------Control ON/OFF de variables-----------------*/
+    // Si id_trama(1) = control  && (1seg / 0.01 seg) = 100, condicion if cada 1 seg.
+    /*-Solo se tendra estado manual o automatico, no se podra tener una variable con control automatico y otra con control manual*/
+    
+ 
+ 
   //Serial.println(sens1_read);
-  if(seconds >= 600)  // (6 / 0.01 seg) = 600, condicion if cada 6 seg
+  if(seconds == 600)  // (6 / 0.01 seg) = 600, condicion if cada 6 seg
   {
     incrementador_tx++;  // byte Retorna a cero despues de 255
     make_trama(1,incrementador_tx);  // 1 trama normal hacia java cada un segundo 10 seg, con incrementador_tx++
     send_trama();
     seconds = 0;
-  } 
+    
+    
+    if(id_trama == 1)   
+    { 
+      if (sensor_ph_value >= ph_sp)
+      {
+        digitalWrite(led3,HIGH);
+      }
+      else if(sensor_ph_value <= (ph_sp + 0.2))  //histeresis de 0.2 ph hacia arriba
+      {
+        digitalWrite(led3,LOW);
+      }
+      
+      if (controlador_ph_value >= ph_sp)
+      {
+        digitalWrite(led2,HIGH);
+      }
+      else if(controlador_ph_value <= (ph_sp + 0.2))  //histeresis de 0.2 ph hacia arriba
+      {
+        digitalWrite(led2,LOW);
+      }
+        
+      if (promedio_temp <= (temp_sp - 1.5))  // histeresis entre set point -0.3 y set point - 0.1.
+      {
+        digitalWrite(led,HIGH);
+      }
+      else if(promedio_temp >= (temp_sp - 0.5)) // por retardo de proceso, se apaga antes el calentador
+      {
+        digitalWrite(led,LOW);
+      }
+      timer_control = 0;
+    } 
+    
+  }
+     
+  /*- Periodo de ejecucion funciones -*/
+  if(aux_timer1 == 1) // cada 10 (ms) 
+  { 
+    seconds++;             //aumenta cada 10 (ms)
+    timer_lectura++;      //timer de lectura de sensores aumenta cada 10 (ms)
+    //timer_control++;
+    timer_loop++;
+    lectura_sensores();  // se llama procesar_datos() desde lectura_sensores() 
+    aux_timer1 = 0;       
+  }
 }
 
   
