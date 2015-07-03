@@ -2,11 +2,11 @@
 #include <avr/interrupt.h>
 // comentario prueba
 // comentario 2
-/*Varibles de prueba*/
-int  led = 8;
-int  led1 = 9;
-int  led2 = 10;
-int  led3 = 11;
+/*Varibles de relé*/
+int  led = 8;    //Relé 1 D8  en arduino_xbee
+int  led1 = 9;   //Relé 2 D9  en arduino_xbee
+int  led2 = 10;  //Relé 3 D10 en arduino_xbee
+int  led3 = 11;  //Relé 4 D11 en arduino_xbee
 /*Variables timer*/
 byte timer_lectura;
 int timer_control;
@@ -72,6 +72,12 @@ float sens3_read;
 float sens4_read;
 float sens5_read;
 float sens6_read;
+/*Variable estado salidas digitales*/
+byte estado_led;
+byte estado_led1;
+byte estado_led2;
+byte estado_led3;
+byte output_state;
 /*Variables propias de los sensores*/
 float sensor_ph_value;
 byte flag_ph1;
@@ -172,6 +178,11 @@ void setup()
   digitalWrite(led2,LOW);
   digitalWrite(led3,LOW);
   
+  estado_led = 0;
+  estado_led1 = 0;
+  estado_led2 = 0;
+  estado_led3 = 0;
+  output_state = 0;
   /*Variables a medir e implementar en programa antes de instalacion*/
   voltaje_ref_ADC = 4.85;   //Voltaje medido
   
@@ -526,6 +537,19 @@ void actuadores_off() // Funcion para apagar los 4 actuadores
   digitalWrite(led3,LOW); 
 }
 
+void estado_output()
+{
+  estado_led   = digitalRead(led);
+  bitWrite(output_state, 0, estado_led); 
+  estado_led1 =digitalRead(led1);
+  bitWrite(output_state, 1, estado_led1);
+  estado_led2 =digitalRead(led2);
+  bitWrite(output_state, 2, estado_led2);
+  estado_led3 =digitalRead(led3);
+  bitWrite(output_state, 3, estado_led3); 
+}
+
+
 void procesar_datos(int canal)
 {
   switch (canal)
@@ -601,7 +625,7 @@ byte make_trama(byte a,byte b)
   sens3_tx    = controlador_ph_value * 10;  // decimas a entero para enviar como (byte)
   sens4_tx    = 0;
   sens5_tx    = 0;
-  aux_tx      = 0;
+  aux_tx      = output_state;
   eof_tx      = '%';
 }
 
@@ -659,7 +683,8 @@ void loop()
       if(read_trama())
       {
         deco_trama();
-        make_trama(2,estado_rx);  //ide_trama 2= trama de confirmacion, se envia el estado_rx recibido a java
+        estado_output(); //estado de la salidas digitales HIGH = 1 o LOW = 0  valores almacenados en variable output_state.
+        make_trama(2,estado_rx);  //id_trama 2= trama de confirmacion, se envia el estado_rx recibido a java
         // Se envia la trama de confirmaciòn con valores, por èstos debieran no considerarse porque lo importante es la confirmaciòn
         send_trama();
       }
@@ -690,10 +715,11 @@ void loop()
   } 
  
   //Serial.println(sens1_read);
-  if(seconds == 600)  // (6 / 0.01 seg) = 600, condicion if cada 6 seg
+  if(seconds == 100)  // (6 / 0.01 seg) = 600, condicion if cada 6 seg
   {
     incrementador_tx++;  // byte Retorna a cero despues de 255
-    make_trama(1,incrementador_tx);  // 1 trama normal hacia java cada un segundo 10 seg, con incrementador_tx++
+    estado_output();     //estado de la salidas digitales HIGH = 1 o LOW = 0  valores almacenados en variable output_state.
+    make_trama(1,incrementador_tx);  // 1 trama normal hacia java cada 6 segundos, con incrementador_tx++
     send_trama();
     seconds = 0;
     
@@ -705,33 +731,33 @@ void loop()
     { 
       switch(aux2_sp)
       {
-        case(1):
+        case(1):   //Set_point Esterelizacion con tiempo limite
         {
-          if(aux1_sp >= minutos)
+          if(aux1_sp > minutos)
           {
             set_point();
           }
           else if(aux1_sp <= minutos)
           {
-            minutos = 0;
+            minutos = aux1_sp;
             actuadores_off();
           }         
           break;
         }
-        case(2):
+        case(2):  //Set_point Enfriamiento con tiempo limite
         {
-          if(aux1_sp >= minutos)
+          if(aux1_sp > minutos)
           {
-            minutos = 0;
             set_point();
           } 
           else if(aux1_sp <= minutos)
           {
+            minutos = aux1_sp;
             actuadores_off();
           }  
           break;
         }
-        case(3):
+        case(3):    //Set_point normal
         {
           set_point();
           break;
