@@ -9,7 +9,7 @@ int  led2 = 10;  //Relé 3 D10 en arduino_xbee
 int  led3 = 11;  //Relé 4 D11 en arduino_xbee
 /*Variables timer*/
 byte timer_lectura;
-int timer_control;
+int  timer_control;
 byte timer_muestreo;
 byte milisegundos;
 byte segundos;
@@ -19,7 +19,7 @@ byte incrementador_tx; // incrementador de timer enviado hacia java
 /*Timer1*/
 int  aux_timer1; 
 int  seconds;
-int timer_loop;
+int  timer_loop;
 /*Buffer de trama recibida*/
 float  arreglo[10];
 int  contador;
@@ -59,12 +59,12 @@ byte  sens5_tx;
 byte  aux_tx;
 byte  eof_tx;
 /*Declaracion entradas analogas para sensores*/
-byte controlador_ph   = A0;  //Lectura controlador pH 4-20 mA a 1- 5   Volts en entrada analoga A0
+byte controlador_ph   = A0;  //Lectura controlador pH       4-20 mA a 1- 5   Volts en entrada analoga A0
 byte controlador_aux  = A1;  //Lectura controlador auxiliar 4-20 mA a 1- 5   Volts en entrada analoga A1
-byte PT100            = A2;  //Lectura controlador auxiliar 4-20 mA a 1- 5   Volts en entrada analoga A1
-byte sensor_ph        = A4; //Lectura sensor PH
+byte sensor_ptc       = A2;  //Lectura sensor temperatura PTC en entrada analoga A2
+byte sensor_ph        = A4; //Lectura sensor PH   (Ver en que entrada analoga se conecta el sensor A3 o A4)
 byte sensor_aux       = A3; //Lectura sensor auxiliar
-byte ADC_input        = A5; //Lectura ADC
+byte adc_input        = A5; //Lectura ADC
 float voltaje_ref_ADC;  
 /**/
 float sens1_read;
@@ -79,7 +79,7 @@ byte estado_led1;
 byte estado_led2;
 byte estado_led3;
 byte output_state;
-/*Variables propias de los sensores*/
+/*Variables propias del sensor pH*/
 float sensor_ph_value;
 byte flag_ph1;
 byte flag_ph2;
@@ -93,18 +93,35 @@ byte flag_ph2_cont;
 float controlador_ph7_cal;
 float controlador_ph4_cal;
 float paso_ph_cont;
+/*Variables propias del sensor de temperatura PTC*/
+float sensor_ptc_value;
 
 /*Variables Filtro Butter para sensor pH, sensor temperatura PTC*/
 float ACoef_sph[5];
 float BCoef_sph[5];
-int NCoef_sph;
+int   NCoef_sph;
 float y_sph[5]; //output samples
 float x_sph[5]; //input samples
-int n_sph;
+int   n_sph;
+/*Variables Filtro IIR Butter para  sensor temperatura PTC*/
+float ACoef_temp[5];
+float BCoef_temp[5];
+int   NCoef_temp;
+float y_temp[5]; //output samples
+float x_temp[5]; //input samples
+int n_temp;
+/*Variables Filtro Butter para sensor pH, sensor temperatura PTC*/
+float ACoef_con_ph[5];
+float BCoef_con_ph[5];
+int   NCoef_con_ph;
+float y_con_ph[5]; //output samples
+float x_con_ph[5]; //input samples
+int n_con_ph;
 
 
 
-/*--Media movil--*/
+
+/*--Media movil--
 float promedio_ph;
 float promedio_temp;
 float promedio_cont_aux;
@@ -114,6 +131,7 @@ int suma_cont_aux;
 int arreglo_ph[100];
 int arreglo_temp[100];
 int arreglo_cont_aux[100];
+*/
 
 /* Varibales identificador sensor o actuador*/
 byte ph_sens_or_cont;    //aux2_sp primer BIT 0 para sensor pH y 1 para controlador pH 
@@ -124,34 +142,61 @@ byte aux1_sens_or_cont;  //aux2_sp quinto BIT 0 para sensor auxiliar_1 y 1 para 
 
 void setup()
 {
- /* for (int h = 0; h < 100; h++)
-  {
-    arreglo_ph[h] = 0;
-    arreglo_temp[h] = 0;
-    arreglo_cont_aux[h] = 0;
-  }*/
   for (int h = 0; h < 5; h++)
   {
-    x_sph[h] = 0;
+    x_sph[h] = 0; //Arreglo sensor pH para filtro IIR Butterworth
     y_sph[h] = 0;
     
-    x_temp[h] = 0;
+    x_temp[h] = 0; //Arreglo sensor temperatura ptc para filtro IIR Butterworth
     y_temp[h] = 0;
+    
+    x_con_ph[h] = 0; //Arreglo controlador pH para filtro IIR Butterworth
+    y_con_ph[h] = 0;
   }
-  
-   NCoef_sph = 4;
-     
-   ACoef_sph[0] = 0.000000374;
-   ACoef_sph[1] = 0.0000001496;
-   ACoef_sph[2] = 0.0000002244;
-   ACoef_sph[3] = 0.0000001496;
-   ACoef_sph[4] = 0.0000000374;
+ /*Constantes filtro IIR Butter sensor ph*/
+  NCoef_sph = 4;
    
-   BCoef_sph[0] =  1;
-   BCoef_sph[1] = -3.8687;
-   BCoef_sph[2] =  5.6145;
-   BCoef_sph[3] = -3.6228;
-   BCoef_sph[4] =  0.8769;
+  ACoef_sph[0] = 0.000806359;
+  ACoef_sph[1] = 0.003225439;
+  ACoef_sph[2] = 0.004838159;
+  ACoef_sph[3] = 0.003225439;
+  ACoef_sph[4] = 0.000806359;
+   
+  BCoef_sph[0] =  1;
+  BCoef_sph[1] = -3.01755;
+  BCoef_sph[2] =  3.50719;
+  BCoef_sph[3] = -1.84755;
+  BCoef_sph[4] =  0.37081;
+   
+   /*Constantes filtro IIR Butter sensor temperatura*/
+  NCoef_temp = 4;
+   
+  ACoef_temp[0] = 0.000806359;
+  ACoef_temp[1] = 0.003225439;
+  ACoef_temp[2] = 0.004838159;
+  ACoef_temp[3] = 0.003225439;
+  ACoef_temp[4] = 0.000806359;
+   
+  BCoef_temp[0] =  1;
+  BCoef_temp[1] = -3.01755;
+  BCoef_temp[2] =  3.50719;
+  BCoef_temp[3] = -1.84755;
+  BCoef_temp[4] =  0.37081;
+   
+   /*Constantes filtro IIR Butter sensor ph*/
+  NCoef_con_ph = 4;
+   
+  ACoef_con_ph[0] = 0.000806359;
+  ACoef_con_ph[1] = 0.003225439;
+  ACoef_con_ph[2] = 0.004838159;
+  ACoef_con_ph[3] = 0.003225439;
+  ACoef_con_ph[4] = 0.000806359;
+   
+  BCoef_con_ph[0] =  1;
+  BCoef_con_ph[1] = -3.01755;
+  BCoef_con_ph[2] =  3.50719;
+  BCoef_con_ph[3] = -1.84755;
+  BCoef_con_ph[4] =  0.37081;
    
   Serial.begin(9600);
   pinMode(led, OUTPUT);
@@ -163,13 +208,13 @@ void setup()
   digitalWrite(led2,LOW);
   digitalWrite(led3,LOW);
   
-  estado_led = 0;
-  estado_led1 = 0;
-  estado_led2 = 0;
-  estado_led3 = 0;
+  estado_led   = 0;
+  estado_led1  = 0;
+  estado_led2  = 0;
+  estado_led3  = 0;
   output_state = 0;
   /*Variables a medir e implementar en programa antes de instalacion*/
-  voltaje_ref_ADC = 4.85;   //Voltaje medido
+  voltaje_ref_ADC = 4.85;   //Voltaje medido en tarjet, utilizado para conversion ADC
   
   flag_ph1 = 0;
   flag_ph2 = 0;
@@ -183,10 +228,11 @@ void setup()
   paso inicial = (7-4)/(1-0.85)
   paso = 20 pH/volt
   */
+  
    flag_ph1_cont = 0;
    flag_ph2_cont = 0;
-   controlador_ph7_cal = 2.641; //Variable referencia arrojar valor en pantalla
-   paso_ph_cont = 3.94;         //Variable referencia arrojar valor en pantalla
+   controlador_ph7_cal = 2.641; //Variable referencia arrojar valor en pantalla de controlador
+   paso_ph_cont = 3.94;         //Variable referencia arrojar valor en pantalla de controlador
    /*Variables timer*/
    timer_control = 0;          //timer de control de variables
    timer_lectura = 0;          //timer de lectura de datos
@@ -199,14 +245,15 @@ void setup()
    pH7 - 12 mA - 2.64 V (simulador)
    pH4 - 8.54 mA - 1.88 V (simulador)
    */
-  /*Variables media movil*/ 
+   
+  /*Variables media movil 
   promedio_ph = 0;
   promedio_temp = 0;
   promedio_cont_aux = 0;
   suma_ph = 0;
   suma_temp = 0;
   suma_cont_aux = 0;
-  
+  */
   
   incrementador_tx  = 0;
   id_trama    = 0;
@@ -368,11 +415,11 @@ void set_point()
     digitalWrite(led2,LOW);
   }
   
-  if (promedio_temp <= (temp_sp - 1.5))  // histeresis entre set point -0.3 y set point - 0.1.
+  if (sensor_ptc_value <= (temp_sp - 1.5))  // histeresis entre set point -0.3 y set point - 0.1.
   {
     digitalWrite(led,HIGH);
   }
-  else if(promedio_temp >= (temp_sp - 0.5)) // por retardo de proceso, se apaga antes el calentador
+  else if(sensor_ptc_value >= (temp_sp - 0.5)) // por retardo de proceso, se apaga antes el calentador
   {
     digitalWrite(led,LOW);
   }
@@ -386,13 +433,13 @@ byte set_calibracion(byte flag_c)
     { 
       if(aux1_cal == 1) //calibracion pH4
       {
-        sensor_ph_4_cal = promedio_ph * (voltaje_ref_ADC / 1024); //lectura pH4 de bit a milivolts
+        sensor_ph_4_cal = sensor_ph_value; //lectura pH4 de bit a milivolts
         flag_ph1 = 1;
        // digitalWrite(led1,HIGH);
       }
       else if(aux1_cal == 2) //calibracion con pH7
       {
-        sensor_ph_7_cal = promedio_ph * (voltaje_ref_ADC / 1024); //lectura pH4 de bit a milivolts
+        sensor_ph_7_cal = sensor_ph_value; //lectura pH4 de bit a milivolts
         flag_ph2 = 1;
        // digitalWrite(led2,HIGH);
       }
@@ -414,13 +461,13 @@ byte set_calibracion(byte flag_c)
     { 
       if(aux1_cal == 3) //calibracion pH4
       {
-        controlador_ph4_cal = promedio_cont_aux * (voltaje_ref_ADC / 1024); //lectura pH4 de bit a milivolts
+        controlador_ph4_cal = controlador_ph_value; //lectura pH4 de bit a milivolts
         flag_ph1_cont = 1;
        // digitalWrite(led1,HIGH);
       }
       else if(aux1_cal == 4) //calibracion con pH7
       {
-        controlador_ph7_cal = promedio_cont_aux * (voltaje_ref_ADC / 1024); //lectura pH4 de bit a milivolts
+        controlador_ph7_cal = controlador_ph_value; //lectura pH4 de bit a milivolts
         flag_ph2_cont = 1;
         //digitalWrite(led2,HIGH);
       }
@@ -437,7 +484,7 @@ byte set_calibracion(byte flag_c)
     { 
       break;
     }
-    case(5):  // Calibracion PT100
+    case(5):  // Calibracion sensor_ptc
     { 
       break;
     }
@@ -451,7 +498,7 @@ byte set_calibracion(byte flag_c)
 
 void lectura_sensores()
 {
-  switch(timer_lectura) //lectura de un sensor cada 0.01 (s), equivale a un tiempo de lectura = 0.06 (s) x los 6 sensores.
+  switch(timer_lectura) //lectura de un sensor cada 0.1 (s), equivale a un tiempo de lectura = 0.6 (s) x sensor,  fs= (1/0.6)
   {
     case(1):
     {
@@ -468,6 +515,7 @@ void lectura_sensores()
     case(3):
     {
       sens3_read = analogRead(controlador_ph);
+      procesar_datos(3);
       break;
     }
     case(4):
@@ -478,12 +526,13 @@ void lectura_sensores()
     }
     case(5):
     {
-      sens5_read = analogRead(PT100);                        //Sensor auxiliar 2
+      sens5_read = analogRead(sensor_ptc);                        //Sensor auxiliar 2
+      procesar_datos(5);
       break;
     }
     case(6):
     {
-      sens6_read = analogRead(ADC_input);                    //Sensor auxiliar 3
+      sens6_read = analogRead(adc_input);                    //Sensor auxiliar 3
       timer_lectura = 0;
       break;
     }
@@ -493,21 +542,21 @@ void lectura_sensores()
 
 
 
-void procesar_datos(int canal)
+void procesar_datos(byte canal)
 {
   switch (canal)
   {
-    case(1):  // CANAL ADC DE sensor PH
+    case(1):  // CANAL DE sensor PH
     {
       for(n_sph = NCoef_sph; n_sph > 0; n_sph--) //Desplazo de la muestra mas antigua
       {
         x_sph[n_sph] = x_sph[n_sph - 1];
         y_sph[n_sph] = y_sph[n_sph - 1];
       }
-      //Calculate the new output
-      x_sph[0] = sens1_read;
-      y_sph[0] = ACoef_sph[0] * x_sph[0];
-       
+      
+      x_sph[0] = sens1_read;                    //nuevo valor input
+      y_sph[0] = ACoef_sph[0] * x_sph[0];       //nuevo valor output    
+      //Filtro IIR 
       for(n_sph = 1; n_sph <= NCoef_sph; n_sph++)
       {
         y_sph[0] += (ACoef_sph[n_sph] * x_sph[n_sph]) - (BCoef_sph[n_sph] * y_sph[n_sph]);
@@ -536,22 +585,8 @@ void procesar_datos(int canal)
     }
     case(2):
     {
-      for(n_temp = NCoef_temp; n_temp > 0; n_temp--) //Desplazo de la muestra mas antigua
-      {
-        x_temp[n_temp] = x_temp[n_temp - 1];
-        y_temp[n_temp] = y_temp[n_temp - 1];
-      }
-      //Calculate the new output
-      x_temp[0] = sens2_read;
-      y_temp[0] = ACoef_temp[0] * x_temp[0];
-       
-      for(n_temp = 1; n_temp <= NCoef_temp; n_temp++)
-      {
-        y_temp[0] += (ACoef_temp[n_temp] * x_temp[n_temp]) - (BCoef_temp[n_temp] * y_temp[n_temp]);
-      }
-   
-      sensor_ph_value = y_temp[0] * (voltaje_ref_ADC / 1024);
-      sensor_ph_value = (paso_ph_cal * sensor_ph_value) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH     
+
+        
       //shift the old samples
       /*for(int g = 100; g > 0; g--)   //a 0.06 seg por muestra el arreglo para 100 muestras se llena en 6 (s)//rellenar arreglo utilizando incrementador seconds (sugerencia no validada)
       {
@@ -567,10 +602,31 @@ void procesar_datos(int canal)
       suma_temp = 0; */
       break;
     }
+    case(3):
+    {
+      for(n_con_ph = NCoef_con_ph; n_con_ph > 0; n_con_ph--) //Desplazo de la muestra mas antigua
+      {
+        x_con_ph[n_con_ph] = x_con_ph[n_con_ph - 1];
+        y_con_ph[n_con_ph] = y_con_ph[n_con_ph - 1];
+      }
+      //Calculate the new output
+      x_con_ph[0] = sens3_read;
+      y_con_ph[0] = ACoef_con_ph[0] * x_con_ph[0];
+       
+      for(n_con_ph = 1; n_con_ph <= NCoef_con_ph; n_con_ph++)
+      {
+        y_con_ph[0] += (ACoef_con_ph[n_con_ph] * x_con_ph[n_con_ph]) - (BCoef_con_ph[n_con_ph] * y_con_ph[n_con_ph]);
+      }
+   
+      controlador_ph_value    =  y_con_ph[0] * (voltaje_ref_ADC / 1024);              //controlador pH conectado en adc 4 que corresponde a controlador auxiliar
+      controlador_ph_value    = (paso_ph_cont * controlador_ph_value) - (paso_ph_cont * controlador_ph7_cal) + 7;  
+      break;
+    }
     case(4):
     {
+
       //shift the old samples
-      for(int g = 100; g > 0; g--)   //a 0.06 seg por muestra el arreglo para 100 muestras se llena en 6 (s)//rellenar arreglo utilizando incrementador para no entrar en for (sugerencia no validada)
+     /* for(int g = 100; g > 0; g--)   //a 0.06 seg por muestra el arreglo para 100 muestras se llena en 6 (s)//rellenar arreglo utilizando incrementador para no entrar en for (sugerencia no validada)
       {
          arreglo_cont_aux[g] = arreglo_cont_aux[g-1];    //arreglo controlador auxiliar
       }
@@ -583,7 +639,29 @@ void procesar_datos(int canal)
       promedio_cont_aux       = suma_cont_aux / 100;
       suma_cont_aux           = 0;   
       controlador_ph_value    = promedio_cont_aux * (voltaje_ref_ADC / 1024);              //controlador pH conectado en adc 4 que corresponde a controlador auxiliar
-      controlador_ph_value    = (paso_ph_cont * controlador_ph_value) - (paso_ph_cont * controlador_ph7_cal) + 7;  
+      controlador_ph_value    = (paso_ph_cont * controlador_ph_value) - (paso_ph_cont * controlador_ph7_cal) + 7;  */
+      break;
+    }
+    case(5):
+    {
+      for(n_temp = NCoef_temp; n_temp > 0; n_temp--) //Desplazo de la muestra mas antigua
+      {
+        x_temp[n_temp] = x_temp[n_temp - 1];
+        y_temp[n_temp] = y_temp[n_temp - 1];
+      }
+      //Calculate the new output
+      x_temp[0] = sens5_read;
+      y_temp[0] = ACoef_temp[0] * x_temp[0];
+       
+      for(n_temp = 1; n_temp <= NCoef_temp; n_temp++)
+      {
+        y_temp[0] += (ACoef_temp[n_temp] * x_temp[n_temp]) - (BCoef_temp[n_temp] * y_temp[n_temp]);
+      }  
+      sensor_ptc_value = y_temp[0] * (voltaje_ref_ADC / 1024);
+      break;
+    }
+    case(6):
+    {
       break;
     }
     default:break;
@@ -621,7 +699,7 @@ byte make_trama(byte a,byte b)
   sens3_tx    = controlador_ph_value * 10;  // decimas a entero para enviar como (byte)
   sens4_tx    = 0;
   sens5_tx    = 0;
-  aux_tx      = output_state;
+  aux_tx      = output_state;               //Estado de los relay (Encendido = 1 / Apagado = 0)
   eof_tx      = '%';
 }
 
@@ -691,7 +769,7 @@ void loop()
       } 
     }
     
-    switch(id_trama)
+    switch(id_trama)   //  Ingreso a la funciones control manual set_manual() y calibracion set_calibracion(flag_cal)
     {
       case(2): //trama = manual
       { 
@@ -773,7 +851,7 @@ void loop()
     aux_timer1 = 0;       
   }
   
-  if(timer_muestreo == 10)  // Tiempo de muestreo = 10 (ms) * 10, por cada uno de los sensores, lo que equivale a un tiempo de muestreo de 600 (ms) = (fs = (1/0.6))
+  if(timer_muestreo == 10)  // Tiempo de muestreo = 10 (ms) * 10=100 (ms), por cada uno de los sensores, lo que equivale a un tiempo de muestreo de 600 (ms) = (fs = (1/0.6))
   {
     timer_lectura++;        //timer de lectura de sensores aumenta cada 100 (ms)
     lectura_sensores();     // se llama procesar_datos() desde lectura_sensores() 
