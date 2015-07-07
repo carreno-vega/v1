@@ -14,6 +14,9 @@ byte timer_muestreo;
 byte milisegundos;
 byte segundos;
 byte minutos;
+
+/*Variable inicio programa*/
+byte flag_inicio;
 /*id_trama enviada incrementa cada 1 seg*/
 byte incrementador_tx; // incrementador de timer enviado hacia java
 /*Timer1*/
@@ -83,15 +86,19 @@ byte output_state;
 float sensor_ph_value;
 byte flag_ph1;
 byte flag_ph2;
-float sensor_ph_7_cal;
+byte flag_ph3;
 float sensor_ph_4_cal;
+float sensor_ph_7_cal;
+float sensor_ph_10_cal;
 float paso_ph_cal;
 /*variables controlador pH*/
 float controlador_ph_value;
 byte flag_ph1_cont;
 byte flag_ph2_cont;
-float controlador_ph7_cal;
+byte flag_ph3_cont;
 float controlador_ph4_cal;
+float controlador_ph7_cal;
+float controlador_ph10_cal;
 float paso_ph_cont;
 /*Variables propias del sensor de temperatura PTC*/
 float sensor_ptc_value;
@@ -208,6 +215,9 @@ void setup()
   digitalWrite(led2,LOW);
   digitalWrite(led3,LOW);
   
+  /*Variable inicio programa*/
+  flag_inicio = 0;
+  
   estado_led   = 0;
   estado_led1  = 0;
   estado_led2  = 0;
@@ -218,6 +228,7 @@ void setup()
   
   flag_ph1 = 0;
   flag_ph2 = 0;
+  flag_ph3 = 0;
   paso_ph_cal = 20;  //paso inicial referencial, luego en funcion calibracion se toma el valor real del paso de pH 
   sensor_ph_7_cal = 1; //Valor inicial referencial para el voltaje en ADC para el sensor de pH igual a 7
   /*
@@ -231,6 +242,7 @@ void setup()
   
    flag_ph1_cont = 0;
    flag_ph2_cont = 0;
+   flag_ph3_cont = 0;
    controlador_ph7_cal = 2.641; //Variable referencia arrojar valor en pantalla de controlador
    paso_ph_cont = 3.94;         //Variable referencia arrojar valor en pantalla de controlador
    /*Variables timer*/
@@ -443,12 +455,23 @@ byte set_calibracion(byte flag_c)
         flag_ph2 = 1;
        // digitalWrite(led2,HIGH);
       }
+      else if(aux1_cal == 3) //calibracion con pH10
+      {
+        sensor_ph_10_cal = sensor_ph_value; //lectura pH4 de bit a milivolts
+        flag_ph3 = 1;
+      }
+      
       if((flag_ph1 == 1) && (flag_ph2 == 1))
       {
         paso_ph_cal = ((7 - 4) / (sensor_ph_7_cal - sensor_ph_4_cal)); // pH/Volt paso para cotrolador y adapatdor de 4-20 mA, voltaje referencia ADC igual a 4.85 Volts
         flag_ph1 = 0;
         flag_ph2 = 0;
-        //digitalWrite(led3,HIGH);
+      }
+      if((flag_ph2 == 1) && (flag_ph3 == 1))
+      {
+        paso_ph_cal = ((10 - 7) / (sensor_ph_10_cal - sensor_ph_7_cal)); // pH/Volt paso para cotrolador y adapatdor de 4-20 mA, voltaje referencia ADC igual a 4.85 Volts
+        flag_ph2 = 0;
+        flag_ph3 = 0;
       }
       
       break;
@@ -459,23 +482,37 @@ byte set_calibracion(byte flag_c)
     }
     case(3):  // Calibracion Controlador pH 420 (1)
     { 
-      if(aux1_cal == 3) //calibracion pH4
+      if(aux1_cal == 4) //calibracion pH4
       {
         controlador_ph4_cal = controlador_ph_value; //lectura pH4 de bit a milivolts
         flag_ph1_cont = 1;
        // digitalWrite(led1,HIGH);
       }
-      else if(aux1_cal == 4) //calibracion con pH7
+      else if(aux1_cal == 5) //calibracion con pH7
       {
         controlador_ph7_cal = controlador_ph_value; //lectura pH4 de bit a milivolts
         flag_ph2_cont = 1;
         //digitalWrite(led2,HIGH);
       }
+      else if(aux1_cal == 6) //calibracion con pH7
+      {
+        controlador_ph10_cal = controlador_ph_value; //lectura pH4 de bit a milivolts
+        flag_ph3_cont = 1;
+        //digitalWrite(led2,HIGH);
+      }
+      
       if((flag_ph1_cont == 1) && (flag_ph2_cont == 1))
       {
         paso_ph_cont = ((7 - 4) / (controlador_ph7_cal - controlador_ph4_cal)); // pH/Volt paso para cotrolador y adapatdor de 4-20 mA, voltaje referencia ADC igual a 4.85 Volts
         flag_ph1_cont = 0;
         flag_ph2_cont = 0;
+        //digitalWrite(led3,HIGH);
+      }
+      if((flag_ph2_cont == 1) && (flag_ph3_cont == 1))
+      {
+        paso_ph_cont = ((10 - 7) / (controlador_ph10_cal - controlador_ph7_cal)); // pH/Volt paso para cotrolador y adapatdor de 4-20 mA, voltaje referencia ADC igual a 4.85 Volts
+        flag_ph2_cont = 0;
+        flag_ph3_cont = 0;
         //digitalWrite(led3,HIGH);
       }
       break;     
@@ -767,26 +804,45 @@ void loop()
         make_trama(3,0);   // id_trama = 3 hacia java = error de trama
         send_trama(); 
       } 
+      timer_loop = 0;
     }
-    
-    switch(id_trama)   //  Ingreso a la funciones control manual set_manual() y calibracion set_calibracion(flag_cal)
-    {
-      case(2): //trama = manual
-      { 
-        set_manual();
-        id_trama = 0; 
-        break;
-      }
-      case(3): //trama = calibraciòn
-      { 
-        set_calibracion(flag_cal);
-        id_trama = 0; 
-        break;
-      }
-      default:break;
-    } 
-    timer_loop = 0;
+  }
+  
+  if(id_trama == 5) //"Pausar" programa,apagar actuadores.
+  {
+    make_trama(5,0);
+    flag_inicio = 0;
+    actuadores_off();
+    goto fin_programa;
+  }
+  
+  if((id_trama == 4) || (flag_inicio == 1)) //
+  {
+    make_trama(4,0);
+    flag_inicio = 1;
+  }
+  else
+  {
+    goto fin_programa;
+  }
+  
+  switch(id_trama)   //  Ingreso a la funciones control manual set_manual() y calibracion set_calibracion(flag_cal)
+  {
+    case(2): //trama = manual
+    { 
+      set_manual();
+      id_trama = 0; 
+      break;
+    }
+    case(3): //trama = calibraciòn
+    { 
+      set_calibracion(flag_cal);
+      id_trama = 0; 
+      break;
+    }
+    default:break;
   } 
+ 
  
   //Serial.println(sens1_read);
   if(seconds == 100)  
@@ -840,16 +896,7 @@ void loop()
     } 
   }
   
-  /*- Periodo de ejecucion funciones -*/
-  if(aux_timer1 == 1) // cada 10 (ms) 
-  { 
-    seconds++;             //aumenta cada 10 (ms)
-    milisegundos++;        //aumenta cada 10 (ms)  
-    timer_muestreo++;
-    timer_loop++;
-    
-    aux_timer1 = 0;       
-  }
+
   
   if(timer_muestreo == 10)  // Tiempo de muestreo = 10 (ms) * 10=100 (ms), por cada uno de los sensores, lo que equivale a un tiempo de muestreo de 600 (ms) = (fs = (1/0.6))
   {
@@ -867,6 +914,19 @@ void loop()
   {
     segundos = 0;
     minutos++;
+  }
+  
+  fin_programa:;
+  
+    /*- Periodo de ejecucion funciones -*/
+  if(aux_timer1 == 1) // cada 10 (ms) 
+  { 
+    seconds++;             //aumenta cada 10 (ms)
+    milisegundos++;        //aumenta cada 10 (ms)  
+    timer_muestreo++;
+    timer_loop++;
+    
+    aux_timer1 = 0;       
   }
 
 
