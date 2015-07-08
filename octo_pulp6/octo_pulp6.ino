@@ -1,12 +1,19 @@
+
+
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
+
 #include <act_off.h>
+#include <manual_control.h>
+
 
 
 // comentario prueba
 // comentario 2
-/*Instancia de Clases ara librerias*/
+/*Instancia Clase de librerias*/
 act actuadores; //clase actuadores de act_off
+control control; //clase control
 /*Varibles de relé*/
 int  led = 8;    //Relé 1 D8  en arduino_xbee
 int  led1 = 9;   //Relé 2 D9  en arduino_xbee
@@ -355,62 +362,6 @@ int deco_trama()
       break;
     }
     default:break;  
-  }
-}
-
-void set_manual()
-{
-  switch(inst1_man)
-  {
-    case(0):  // Calentador OFF
-    { 
-      digitalWrite(led,LOW);
-      break;
-    }
-    case(1):  // Calentador ON
-    { 
-      digitalWrite(led,HIGH);
-      break;
-    }
-    case(2):  // Auxiliar OFF
-    { 
-      break;
-    }
-    case(3):  // Auxiliar ON
-    { 
-      break;
-    }
-    case(4):  // Agitador OFF
-    { 
-      digitalWrite(led1,LOW);
-      break;
-    }
-    case(5):  // Agitador ON
-    { 
-      digitalWrite(led1,HIGH);
-      break;
-    }
-    case(6):  // Compresor OFF
-    { 
-      digitalWrite(led2,LOW);
-      break;
-    }
-    case(7):  // Compresor ON
-    { 
-      digitalWrite(led2,HIGH);
-      break;
-    }
-    case(8):  // Bomba OFF
-    { 
-      digitalWrite(led3,LOW);
-      break;
-    }
-    case(9):  // Bomba ON
-    { 
-      digitalWrite(led3,HIGH);
-      break;
-    }
-    default:break;
   }
 }
 
@@ -879,7 +830,7 @@ void loop()
     {
       make_trama(2,0);   // id_trama = 2 trama manual
       send_trama(); 
-      set_manual();
+      control.manual(inst1_man);
       id_trama = 0; 
       break;
     }
@@ -994,7 +945,8 @@ void loop()
     timer_loop++;    
     aux_timer1 = 0;       
   }
-
+  
+  
 } //<- final loop
 
   
