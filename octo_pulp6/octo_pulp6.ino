@@ -1,7 +1,12 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <act_off.h>
+
+
 // comentario prueba
 // comentario 2
+/*Instancia de Clases ara librerias*/
+act actuadores; //clase actuadores de act_off
 /*Varibles de relé*/
 int  led = 8;    //Relé 1 D8  en arduino_xbee
 int  led1 = 9;   //Relé 2 D9  en arduino_xbee
@@ -276,6 +281,8 @@ void setup()
   sens1_tx    = 0;
   sens2_tx    = 0;
   sens3_tx    = 0;
+  sens4_tx    = 0;
+  sens5_tx    = 0;
   /* Inicio del timer1*/
   //Since Timer1 is 16 bits, it can hold a maximum value of (2^16 – 1) or 65535 a 16MHz.
   cli();          // Desaciva las interrupciones globales
@@ -319,7 +326,7 @@ int deco_trama()
       segundos  = 0;                 //Llega trama de set_point especifica
       minutos   = 0;                 //tiempo de reseteo en minutos.
       
-/*      ph_sens_or_cont    = bitRead(aux2_sp, 0);   //aux2_sp primer BIT 0 para sensor pH y 1 para controlador pH 
+/*    ph_sens_or_cont    = bitRead(aux2_sp, 0);   //aux2_sp primer BIT 0 para sensor pH y 1 para controlador pH 
       OD_sens_or_cont    = bitRead(aux2_sp, 1);   //aux2_sp segund BIT 0 para sensor OD y 1 para controlador OD
       temp_sens_or_cont  = bitRead(aux2_sp, 2);   //aux2_sp tercer BIT 0 para sensor Temperatura y 1 para controlador Temperatura
       rpm_sens_or_cont   = bitRead(aux2_sp, 3);   //aux2_sp cuarto BIT 0 para sensor RPM y 1 para controlador RPM
@@ -622,8 +629,7 @@ void procesar_datos(byte canal)
     }
     case(2):
     {
-
-        
+    
       //shift the old samples
       /*for(int g = 100; g > 0; g--)   //a 0.06 seg por muestra el arreglo para 100 muestras se llena en 6 (s)//rellenar arreglo utilizando incrementador seconds (sugerencia no validada)
       {
@@ -704,14 +710,53 @@ void procesar_datos(byte canal)
     default:break;
   }
 }
+/*-------------------------------------------------------------------Reseteo de Variables--*/
 
-void actuadores_off() // Funcion para apagar los 4 actuadores
+void variables_reset()
 {
-  digitalWrite(led,LOW);
-  digitalWrite(led1,LOW);
-  digitalWrite(led2,LOW);
-  digitalWrite(led3,LOW); 
+    for (int h = 0; h < 5; h++)
+  {
+    x_sph[h] = 0; //Arreglo sensor pH para filtro IIR Butterworth
+    y_sph[h] = 0;
+    
+    x_temp[h] = 0; //Arreglo sensor temperatura ptc para filtro IIR Butterworth
+    y_temp[h] = 0;
+    
+    x_con_ph[h] = 0; //Arreglo controlador pH para filtro IIR Butterworth
+    y_con_ph[h] = 0;
+  }
+    /*Variable inicio programa*/
+  flag_inicio  = 0;
+  estado_led   = 0;
+  estado_led1  = 0;
+  estado_led2  = 0;
+  estado_led3  = 0;
+  /*Variables  calibracion*/
+  flag_ph1 = 0;
+  flag_ph2 = 0;
+  flag_ph3 = 0;
+  flag_ph1_cont = 0;
+  flag_ph2_cont = 0;
+  flag_ph3_cont = 0;
+  /*Variables timer*/
+  timer_control = 0;          //timer de control de variables
+  timer_lectura = 0;          //timer de lectura de datos
+  timer_loop = 0;             //timer loop
+  milisegundos = 0;
+  segundos = 0;               //segundos incrementandose hasta el minuto segundos == 60
+  minutos = 0;                //minutos incrementandose hasta la hora minutos == 60, para comparar con tiempo de ejecucion de setpoint.
+ 
+  incrementador_tx  = 0;
+  id_trama    = 0;
+  estado_tx   = 0;
+  contador    = 0;
+  aux_timer1  = 0;
+  seconds     = 0;
+  /*Valor sensores*/
+  sensor_ph_value = 0;       // decimas a entero para enviar como (byte)
+  controlador_ph_value = 0;  
 }
+
 
 void estado_output()
 {
@@ -725,7 +770,7 @@ void estado_output()
   bitWrite(output_state, 3, estado_led3); 
 }
 
-
+/*-------------------------------------------------------------------Comunicacion--*/
 byte make_trama(byte a,byte b)
 {
   sof_tx      = '#';
@@ -739,7 +784,6 @@ byte make_trama(byte a,byte b)
   aux_tx      = output_state;               //Estado de los relay (Encendido = 1 / Apagado = 0)
   eof_tx      = '%';
 }
-
 
 void send_trama()
 {
@@ -784,10 +828,10 @@ ISR(TIMER1_COMPA_vect)   //Flag correspondiente a timer1 comparacion
 {                        
     aux_timer1 = 1;     
 }
-
+/*-------------------------------------------------------------------LOOP--*/
 void loop()
 {
-  if(timer_loop == 10)
+  if(timer_loop == 10)  //cada 100 (ms)
   {
     if (Serial.available() > 0)
     {   
@@ -795,65 +839,90 @@ void loop()
       {
         deco_trama();
         estado_output(); //estado de la salidas digitales HIGH = 1 o LOW = 0  valores almacenados en variable output_state.
-        make_trama(2,estado_rx);  //id_trama 2= trama de confirmacion, se envia el estado_rx recibido a java
-        // Se envia la trama de confirmaciòn con valores, por èstos debieran no considerarse porque lo importante es la confirmaciòn
-        send_trama();
       }
       else
       {
-        make_trama(3,0);   // id_trama = 3 hacia java = error de trama
+        make_trama(6,0);   // id_trama = 3 hacia java = error de trama
         send_trama(); 
-      } 
-      timer_loop = 0;
+      }       
     }
-  }
-  
-  if(id_trama == 5) //"Pausar" programa,apagar actuadores.
+  /*
+  if(id_trama == 5)
   {
     make_trama(5,0);
+    send_trama();
     flag_inicio = 0;
     actuadores_off();
     goto fin_programa;
   }
   
-  if((id_trama == 4) || (flag_inicio == 1)) //
+  if((id_trama == 4) || (flag_inicio == 1))
   {
     make_trama(4,0);
+    send_trama();
     flag_inicio = 1;
   }
   else
   {
     goto fin_programa;
   }
-  
+  */
   switch(id_trama)   //  Ingreso a la funciones control manual set_manual() y calibracion set_calibracion(flag_cal)
   {
+    case(1):
+    {
+      make_trama(1,0);   // id_trama = 1 trama de set point
+      send_trama(); 
+      break;
+    } 
     case(2): //trama = manual
-    { 
+    {
+      make_trama(2,0);   // id_trama = 2 trama manual
+      send_trama(); 
       set_manual();
       id_trama = 0; 
       break;
     }
     case(3): //trama = calibraciòn
-    { 
+    {
+      make_trama(3,0);   // id_trama = 3 hacia java = calibracion
+      send_trama();  
       set_calibracion(flag_cal);
       id_trama = 0; 
       break;
     }
+    case(4):
+    {
+      make_trama(4,0);
+      send_trama();
+      flag_inicio = 1;
+      break;
+    }
+    case(5):
+    {
+      make_trama(5,0);
+      send_trama();
+      flag_inicio = 0;
+      actuadores.off();
+      //goto fin_programa;
+      break;
+    }
     default:break;
-  } 
- 
+  }
+  timer_loop = 0; 
+} 
  
   //Serial.println(sens1_read);
-  if(seconds == 100)  
+  if(seconds == 100) //Cada 1 segundo 
   {
     incrementador_tx++;  // byte Retorna a cero despues de 255
     estado_output();     //estado de la salidas digitales HIGH = 1 o LOW = 0  valores almacenados en variable output_state.
-    make_trama(1,incrementador_tx);  // 1 trama normal hacia java cada 6 segundos, con incrementador_tx++
+    make_trama(0,incrementador_tx);  // 0 trama normal hacia java cada 1 segundo, con incrementador_tx++
     send_trama();
     seconds = 0;
     
-    /*------------Control ON/OFF de variables - Trama SETPOINT-----------------*/
+    /*---------------------------------------------------------------------Control ON/OFF de variables - Trama SETPOINT-----------------*/
+    
     // Si id_trama(1) = control  && (1seg / 0.01 seg) = 100, condicion if cada 1 seg.
     /*-Solo se tendra estado manual o automatico, no se podra tener una variable con control automatico y otra con control manual*/
     
@@ -870,7 +939,7 @@ void loop()
           else if(aux1_sp <= minutos)
           {
             minutos = aux1_sp;
-            actuadores_off();
+            actuadores.off();
           }         
           break;
         }
@@ -883,7 +952,7 @@ void loop()
           else if(aux1_sp <= minutos)
           {
             minutos = aux1_sp;
-            actuadores_off();
+            actuadores.off();
           }  
           break;
         }
@@ -895,8 +964,6 @@ void loop()
       } 
     } 
   }
-  
-
   
   if(timer_muestreo == 10)  // Tiempo de muestreo = 10 (ms) * 10=100 (ms), por cada uno de los sensores, lo que equivale a un tiempo de muestreo de 600 (ms) = (fs = (1/0.6))
   {
@@ -924,11 +991,9 @@ void loop()
     seconds++;             //aumenta cada 10 (ms)
     milisegundos++;        //aumenta cada 10 (ms)  
     timer_muestreo++;
-    timer_loop++;
-    
+    timer_loop++;    
     aux_timer1 = 0;       
   }
-
 
 } //<- final loop
 
