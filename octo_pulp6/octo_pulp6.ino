@@ -1,9 +1,7 @@
-#include <lectura_sensores.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <act_off.h>
 #include <manual_control.h>
-
 
 
 
@@ -12,7 +10,6 @@
 /*Instancia Clase de librerias*/
 act actuadores; //clase actuadores de act_off
 control control; //clase control
-lectura lectura; //clase lectura
 /*Varibles de relé*/
 int  led = 8;    //Relé 1 D8  en arduino_xbee
 int  led1 = 9;   //Relé 2 D9  en arduino_xbee
@@ -39,8 +36,8 @@ float  arreglo[10];
 int  contador;
 /*Identificadores de trama*/
 byte  id_trama;
-byte id_trama_ok; // id_trama_ok = id_trama para set point
 byte  estado_rx;
+byte id_trama_ok;
 /*Variables Set point*/
 byte  ph_sp;
 byte  od_sp;  
@@ -73,32 +70,21 @@ byte  sens4_tx;
 byte  sens5_tx;
 byte  aux_tx;
 byte  eof_tx;
-/*Arreglo de lectura de sensores utlizando libreria lectura_sensores*/
-int sens_read[6];
-/*Declaracion entradas analogas para sensores
+/*Declaracion entradas analogas para sensores*/
 byte controlador_ph   = A0;  //Lectura controlador pH       4-20 mA a 1- 5   Volts en entrada analoga A0
 byte controlador_aux  = A1;  //Lectura controlador auxiliar 4-20 mA a 1- 5   Volts en entrada analoga A1
 byte sensor_ptc       = A2;  //Lectura sensor temperatura PTC en entrada analoga A2
 byte sensor_ph        = A4; //Lectura sensor PH   (Ver en que entrada analoga se conecta el sensor A3 o A4)
 byte sensor_aux       = A3; //Lectura sensor auxiliar
-byte adc_input        = A5; //Lectura ADC*/
-
+byte adc_input        = A5; //Lectura ADC
 float voltaje_ref_ADC;  
-/*
+/**/
 float sens1_read;
 float sens2_read;
 float sens3_read;
 float sens4_read;
 float sens5_read;
 float sens6_read;
-*/
-int sens_420_1;  //ADC A0 controlador 4 - 20 mA
-int sens_420_2;  //ADC A1 controlador 4 - 20 mA
-int sens_ptc;  //ADC A2 sensor PTC
-int sens_sensor_1;  //ADC A3 sensor 1
-int sens_sensor_2;  //ADC A4 sensor 2
-int sens_5v_adc;  //ADC A5 
-
 /*Variable estado salidas digitales*/
 byte estado_led;
 byte estado_led1;
@@ -164,12 +150,12 @@ int arreglo_cont_aux[100];
 */
 
 /* Varibales identificador sensor o actuador*/
-/*byte ph_sens_or_cont;    //aux2_sp primer BIT 0 para sensor pH y 1 para controlador pH 
+byte ph_sens_or_cont;    //aux2_sp primer BIT 0 para sensor pH y 1 para controlador pH 
 byte OD_sens_or_cont;    //aux2_sp segund BIT 0 para sensor OD y 1 para controlador OD
 byte temp_sens_or_cont;  //aux2_sp tercer BIT 0 para sensor Temperatura y 1 para controlador Temperatura
 byte rpm_sens_or_cont;   //aux2_sp cuarto BIT 0 para sensor RPM y 1 para controlador RPM
 byte aux1_sens_or_cont;  //aux2_sp quinto BIT 0 para sensor auxiliar_1 y 1 para controlador auxiliar_1.  
-*/
+
 void setup()
 {
   for (int h = 0; h < 5; h++)
@@ -182,10 +168,6 @@ void setup()
     
     x_con_ph[h] = 0; //Arreglo controlador pH para filtro IIR Butterworth
     y_con_ph[h] = 0;
-  }
-  for (byte i = 0; i < 6; i++)
-  {
-    sens_read[i] = 0;
   }
  /*Constantes filtro IIR Butter sensor ph*/
   NCoef_sph = 4;
@@ -241,7 +223,7 @@ void setup()
   digitalWrite(led1,LOW);
   digitalWrite(led2,LOW);
   digitalWrite(led3,LOW);
-
+  
   /*Variable inicio programa*/
   flag_inicio = 0;
   
@@ -284,12 +266,7 @@ void setup()
    pH7 - 12 mA - 2.64 V (simulador)
    pH4 - 8.54 mA - 1.88 V (simulador)
    */
-  sens_420_1     = 0;  //ADC A0 controlador 4 - 20 mA
-  sens_420_2     = 0;  //ADC A1 controlador 4 - 20 mA
-  sens_ptc       = 0;  //ADC A2 sensor PTC
-  sens_sensor_1  = 0;  //ADC A3 sensor 1
-  sens_sensor_2  = 0;  //ADC A4 sensor 2
-  sens_5v_adc    = 0;  
+   
   /*Variables media movil 
   promedio_ph = 0;
   promedio_temp = 0;
@@ -298,6 +275,7 @@ void setup()
   suma_temp = 0;
   suma_cont_aux = 0;
   */
+  id_trama_ok = 0;
   
   incrementador_tx  = 0;
   id_trama    = 0;
@@ -510,7 +488,7 @@ byte set_calibracion(byte flag_c)
     default:break;
   }
 }  
-/*
+
 void lectura_sensores()
 {
   switch(timer_lectura) //lectura de un sensor cada 0.1 (s), equivale a un tiempo de lectura = 0.6 (s) x sensor,  fs= (1/0.6)
@@ -555,13 +533,12 @@ void lectura_sensores()
   }
 }
 
-*/
+
 
 void procesar_datos(byte canal)
 {
   switch (canal)
   {
-
     case(1):  // CANAL DE sensor PH
     {
       for(n_sph = NCoef_sph; n_sph > 0; n_sph--) //Desplazo de la muestra mas antigua
@@ -570,7 +547,7 @@ void procesar_datos(byte canal)
         y_sph[n_sph] = y_sph[n_sph - 1];
       }
       
-      x_sph[0] = sens_sensor_2;                    //sens_sensor_2 esta conectado sensor pH
+      x_sph[0] = sens1_read;                    //nuevo valor input
       y_sph[0] = ACoef_sph[0] * x_sph[0];       //nuevo valor output    
       //Filtro IIR 
       for(n_sph = 1; n_sph <= NCoef_sph; n_sph++)
@@ -617,7 +594,6 @@ void procesar_datos(byte canal)
       suma_temp = 0; */
       break;
     }
-
     case(3):
     {
       for(n_con_ph = NCoef_con_ph; n_con_ph > 0; n_con_ph--) //Desplazo de la muestra mas antigua
@@ -626,7 +602,7 @@ void procesar_datos(byte canal)
         y_con_ph[n_con_ph] = y_con_ph[n_con_ph - 1];
       }
       //Calculate the new output
-      x_con_ph[0] = sens_420_1;                         //controlador conectado en convertidor 420 A1
+      x_con_ph[0] = sens3_read;
       y_con_ph[0] = ACoef_con_ph[0] * x_con_ph[0];
        
       for(n_con_ph = 1; n_con_ph <= NCoef_con_ph; n_con_ph++)
@@ -666,7 +642,7 @@ void procesar_datos(byte canal)
         y_temp[n_temp] = y_temp[n_temp - 1];
       }
       //Calculate the new output
-      x_temp[0] = sens_ptc;                   //sensor ptc
+      x_temp[0] = sens5_read;
       y_temp[0] = ACoef_temp[0] * x_temp[0];
        
       for(n_temp = 1; n_temp <= NCoef_temp; n_temp++)
@@ -845,9 +821,8 @@ void loop()
     case(1):
     {
       make_trama(1,0);   // id_trama = 1 trama de set point
-      send_trama();
+      send_trama(); 
       id_trama_ok = 1;
-      id_trama = 0; 
       break;
     } 
     case(2): //trama = manual
@@ -855,7 +830,7 @@ void loop()
       make_trama(2,0);   // id_trama = 2 trama manual
       send_trama(); 
       control.manual(inst1_man);
-      id_trama = 0;
+      id_trama = 0; 
       id_trama_ok = 0;
       break;
     }
@@ -873,8 +848,8 @@ void loop()
       make_trama(4,0);
       send_trama();
       flag_inicio = 1;
-      id_trama = 0;
       id_trama_ok = 0;
+      id_trama = 0;
       break;
     }
     case(5):
@@ -882,19 +857,13 @@ void loop()
       make_trama(5,0);
       send_trama();
       flag_inicio = 0;
-     
       actuadores.off();
       id_trama_ok = 0;
       id_trama = 0;
       //goto fin_programa;
       break;
     }
-    default:
-    {
-      id_trama_ok = 0;
-      id_trama = 0;
-      break;
-    }
+    default:break;
   }
   timer_loop = 0; 
 } 
@@ -913,7 +882,7 @@ void loop()
     // Si id_trama(1) = control  && (1seg / 0.01 seg) = 100, condicion if cada 1 seg.
     /*-Solo se tendra estado manual o automatico, no se podra tener una variable con control automatico y otra con control manual*/
     
-    if(id_trama_ok == 1)   
+    if(id_trama == 1)   
     { 
       switch(aux2_sp)
       {
@@ -954,19 +923,8 @@ void loop()
   
   if(timer_muestreo == 10)  // Tiempo de muestreo = 10 (ms) * 10=100 (ms), por cada uno de los sensores, lo que equivale a un tiempo de muestreo de 600 (ms) = (fs = (1/0.6))
   {
-    timer_lectura++;        //timer de lectura de sensores aumenta cada 100 (ms), numero de sensor a leer y procesar
-    sens_read[timer_lectura] = lectura.sensor(timer_lectura);     // se llama procesar_datos() desde lectura_sensores() 
-    sens_420_1     = sens_read[1];  //ADC A0 controlador 4 - 20 mA
-    sens_420_2     = sens_read[2];  //ADC A1 controlador 4 - 20 mA
-    sens_ptc       = sens_read[3];  //ADC A2 sensor PTC
-    sens_sensor_1  = sens_read[4];  //ADC A3 sensor 1
-    sens_sensor_2  = sens_read[5];  //ADC A4 sensor 2
-    sens_5v_adc    = sens_read[6];  //ADC A5 
-    procesar_datos(timer_lectura);
-    if(timer_lectura == 6)
-    {
-      timer_lectura = 0;
-    }
+    timer_lectura++;        //timer de lectura de sensores aumenta cada 100 (ms)
+    lectura_sensores();     // se llama procesar_datos() desde lectura_sensores() 
     timer_muestreo = 0;
   }
   

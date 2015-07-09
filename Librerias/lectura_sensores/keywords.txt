@@ -1,5 +1,0 @@
-lectura	KEYWORD1
-
-
-sensor	KEYWORD2
-
