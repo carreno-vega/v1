@@ -1,4 +1,3 @@
 control	KEYWORD3
 
-manual	KEYWORD4
-
+manual	KEYWORD5

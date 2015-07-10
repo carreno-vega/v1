@@ -3,8 +3,10 @@
 #include <act_off.h>
 #include <manual_control.h>
 
-
-
+//Prueba filtro
+byte sensor_ph_sin_filtro;
+float NewSample2;
+//float NewSample;
 // comentario prueba
 // comentario 2
 /*Instancia Clase de librerias*/
@@ -158,6 +160,9 @@ byte aux1_sens_or_cont;  //aux2_sp quinto BIT 0 para sensor auxiliar_1 y 1 para 
 
 void setup()
 {
+  //PRueba sin filtro
+  sensor_ph_sin_filtro = 0;
+  
   for (int h = 0; h < 5; h++)
   {
     x_sph[h] = 0; //Arreglo sensor pH para filtro IIR Butterworth
@@ -496,31 +501,31 @@ void lectura_sensores()
     case(1):
     {
       sens1_read = analogRead(sensor_ph); 
-      procesar_datos(1); // 60 ms    
+      sensor_ph_value = procesar_datos(1,sens1_read); // 60 ms    
       break;
     }
     case(2):
     {
       sens2_read = analogRead(sensor_aux);
-      procesar_datos(2);
+    //  procesar_datos(2);
       break;
     }
     case(3):
     {
       sens3_read = analogRead(controlador_ph);
-      procesar_datos(3);
+     // procesar_datos(3);
       break;
     }
     case(4):
     {
       sens4_read = analogRead(controlador_aux);               //Sensor 4-20
-      procesar_datos(4);
+     // procesar_datos(4);
       break;
     }
     case(5):
     {
       sens5_read = analogRead(sensor_ptc);                        //Sensor auxiliar 2
-      procesar_datos(5);
+    //  procesar_datos(5);
       break;
     }
     case(6):
@@ -535,28 +540,38 @@ void lectura_sensores()
 
 
 
-void procesar_datos(byte canal)
+float procesar_datos(byte canal, float NewSample)
 {
+  float output_ph = 0;
   switch (canal)
   {
     case(1):  // CANAL DE sensor PH
     {
-      for(n_sph = NCoef_sph; n_sph > 0; n_sph--) //Desplazo de la muestra mas antigua
+      for(int n = NCoef_sph; n > 0; n --) //Desplazo de la muestra mas antigua
       {
-        x_sph[n_sph] = x_sph[n_sph - 1];
-        y_sph[n_sph] = y_sph[n_sph - 1];
+        x_sph[n] = x_sph[n-1];
+        y_sph[n] = y_sph[n-1];
       }
       
-      x_sph[0] = sens1_read;                    //nuevo valor input
+      x_sph[0] = NewSample;                     //nuevo valor input
       y_sph[0] = ACoef_sph[0] * x_sph[0];       //nuevo valor output    
       //Filtro IIR 
-      for(n_sph = 1; n_sph <= NCoef_sph; n_sph++)
+      for(int n = 1; n <= NCoef_sph; n ++)
       {
-        y_sph[0] += (ACoef_sph[n_sph] * x_sph[n_sph]) - (BCoef_sph[n_sph] * y_sph[n_sph]);
+        y_sph[0] += (ACoef_sph[n] * x_sph[n]) - (BCoef_sph[n] * y_sph[n]);
       }
-   
-      sensor_ph_value = y_sph[0] * (voltaje_ref_ADC / 1024);
-      sensor_ph_value = (paso_ph_cal * sensor_ph_value) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH     
+       
+   //   output_ph = y_sph[0] * (voltaje_ref_ADC / 1024);
+      
+   //   output_ph = (paso_ph_cal * output_ph) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH   
+     
+     
+   //    sensor_ph_sin_filtro = NewSample * (voltaje_ref_ADC / 1024);
+   //    sensor_ph_sin_filtro  = (paso_ph_cal * sensor_ph_sin_filtro) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH   
+      
+      output_ph = y_sph[0];
+      NewSample2 = NewSample;
+      
       /*shift the old samples
       for(int g = 100; g > 0; g--)   //a 0.06 seg por muestra el arreglo para 100 muestras se llena en 6 (s)//rellenar arreglo utilizando incrementador seconds (sugerencia no validada)
       {
@@ -574,6 +589,7 @@ void procesar_datos(byte canal)
       sensor_ph_value         = promedio_ph * (voltaje_ref_ADC / 1024);
       sensor_ph_value         = (paso_ph_cal * sensor_ph_value) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH                                                   // decimas a entero para enviar como (byte)
       */
+      return output_ph; 
       break;
     }
     case(2):
@@ -725,10 +741,20 @@ byte make_trama(byte a,byte b)
   sof_tx      = '#';
   id_trama_tx = a;                          // normal = 1, confirm = 2
   estado_tx   = b;                          // envia estado q se recibiò o incrementador para trama normal
-  sens1_tx    = sensor_ph_value * 10;       // decimas a entero para enviar como (byte)
-  sens2_tx    = 0;
-  sens3_tx    = controlador_ph_value * 10;  // decimas a entero para enviar como (byte)
-  sens4_tx    = 0;
+  //sens1_tx    = sensor_ph_value * 10;       // decimas a entero para enviar como (byte)
+  sens1_tx    = sensor_ph_value/4;
+  
+  sensor_ph_value  =  sensor_ph_value * (voltaje_ref_ADC / 1024);
+  sensor_ph_value  = (paso_ph_cal * sensor_ph_value) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH                                                   // decimas a entero para enviar como (byte)
+
+  sens2_tx    = sensor_ph_value;
+  sens3_tx    = NewSample2/4;//controlador_ph_value * 10;  // decimas a entero para enviar como (byte)
+  
+  sensor_ph_sin_filtro = NewSample2 * (voltaje_ref_ADC / 1024);
+  sensor_ph_sin_filtro  = (paso_ph_cal * sensor_ph_sin_filtro) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH   
+      
+  
+  sens4_tx    = sensor_ph_sin_filtro;
   sens5_tx    = 0;
   aux_tx      = output_state;               //Estado de los relay (Encendido = 1 / Apagado = 0)
   eof_tx      = '%';
@@ -795,78 +821,62 @@ void loop()
         send_trama(); 
       }       
     }
-  /*
-  if(id_trama == 5)
-  {
-    make_trama(5,0);
-    send_trama();
-    flag_inicio = 0;
-    actuadores_off();
-    goto fin_programa;
-  }
-  
-  if((id_trama == 4) || (flag_inicio == 1))
-  {
-    make_trama(4,0);
-    send_trama();
-    flag_inicio = 1;
-  }
-  else
-  {
-    goto fin_programa;
-  }
-  */
-  switch(id_trama)   //  Ingreso a la funciones control manual set_manual() y calibracion set_calibracion(flag_cal)
-  {
-    case(1):
+
+    switch(id_trama)   //  Ingreso a la funciones control manual set_manual() y calibracion set_calibracion(flag_cal)
     {
-      make_trama(1,0);   // id_trama = 1 trama de set point
-      send_trama(); 
-      id_trama_ok = 1;
-      break;
-    } 
-    case(2): //trama = manual
-    {
-      make_trama(2,0);   // id_trama = 2 trama manual
-      send_trama(); 
-      control.manual(inst1_man);
-      id_trama = 0; 
-      id_trama_ok = 0;
-      break;
+      case(1):
+      {
+        make_trama(1,0);   // id_trama = 1 trama de set point
+        send_trama(); 
+        id_trama_ok = 1;
+        break;
+      } 
+      case(2): //trama = manual
+      {
+        make_trama(2,0);   // id_trama = 2 trama manual
+        send_trama(); 
+        control.manual(inst1_man);
+        id_trama = 0; 
+        id_trama_ok = 0;
+        break;
+      }
+      case(3): //trama = calibraciòn
+      {
+        make_trama(3,0);   // id_trama = 3 hacia java = calibracion
+        send_trama();  
+        set_calibracion(flag_cal);
+        id_trama = 0;
+        id_trama_ok = 0;
+        break;
+      }
+      case(4):
+      {
+        make_trama(4,0);
+        send_trama();
+        flag_inicio = 1;
+        id_trama_ok = 0;
+        id_trama = 0;
+        break;
+      }
+      case(5):
+      {
+        make_trama(5,0);
+        send_trama();
+        flag_inicio = 0;
+        actuadores.off();
+        id_trama_ok = 0;
+        id_trama = 0;
+        break;
+      }
+      default:break;
     }
-    case(3): //trama = calibraciòn
-    {
-      make_trama(3,0);   // id_trama = 3 hacia java = calibracion
-      send_trama();  
-      set_calibracion(flag_cal);
-      id_trama = 0;
-      id_trama_ok = 0;
-      break;
-    }
-    case(4):
-    {
-      make_trama(4,0);
-      send_trama();
-      flag_inicio = 1;
-      id_trama_ok = 0;
-      id_trama = 0;
-      break;
-    }
-    case(5):
-    {
-      make_trama(5,0);
-      send_trama();
-      flag_inicio = 0;
-      actuadores.off();
-      id_trama_ok = 0;
-      id_trama = 0;
-      //goto fin_programa;
-      break;
-    }
-    default:break;
-  }
-  timer_loop = 0; 
-} 
+    
+    // CADA 100 ms LECTURA DE SENSORES
+    timer_lectura++;        //timer de lectura de sensores aumenta cada 100 (ms)
+    lectura_sensores();     // se llama procesar_datos() desde lectura_sensores() 
+    timer_muestreo = 0;
+    timer_loop = 0; 
+  } 
  
   //Serial.println(sens1_read);
   if(seconds == 100) //Cada 1 segundo 
@@ -875,8 +885,6 @@ void loop()
     estado_output();     //estado de la salidas digitales HIGH = 1 o LOW = 0  valores almacenados en variable output_state.
     make_trama(0,incrementador_tx);  // 0 trama normal hacia java cada 1 segundo, con incrementador_tx++
     send_trama();
-    seconds = 0;
-    
     /*---------------------------------------------------------------------Control ON/OFF de variables - Trama SETPOINT-----------------*/
     
     // Si id_trama(1) = control  && (1seg / 0.01 seg) = 100, condicion if cada 1 seg.
@@ -919,42 +927,55 @@ void loop()
         }default:break;
       } 
     } 
+    seconds = 0;
   }
-  
-  if(timer_muestreo == 10)  // Tiempo de muestreo = 10 (ms) * 10=100 (ms), por cada uno de los sensores, lo que equivale a un tiempo de muestreo de 600 (ms) = (fs = (1/0.6))
-  {
-    timer_lectura++;        //timer de lectura de sensores aumenta cada 100 (ms)
-    lectura_sensores();     // se llama procesar_datos() desde lectura_sensores() 
-    timer_muestreo = 0;
-  }
-  
-  if(milisegundos == 100)  // milisegundos == 100 * 10 (ms) = 1 seg
-  {
-    milisegundos = 0;
-    segundos++;
-  } 
-  if(segundos == 60)      // segundos == 60 = 1 minuto
-  {
-    segundos = 0;
-    minutos++;
-  }
-  
-  fin_programa:;
-  
     /*- Periodo de ejecucion funciones -*/
   if(aux_timer1 == 1) // cada 10 (ms) 
   { 
     seconds++;             //aumenta cada 10 (ms)
     milisegundos++;        //aumenta cada 10 (ms)  
     timer_muestreo++;
-    timer_loop++;    
-    aux_timer1 = 0;       
+    timer_loop++;     
+    
+    // SOLO PARA MINUTOS
+    if(milisegundos == 100)  // milisegundos == 100 * 10 (ms) = 1 seg
+    {
+      milisegundos = 0;
+      segundos++;
+    } 
+    if(segundos == 60)      // segundos == 60 = 1 minuto
+    {
+      segundos = 0;
+      minutos++;
+    }
+    // END SOLO PARA MINUTOS 
+    aux_timer1 = 0;    
   }
-  
   
 } //<- final loop
 
   
+    /*
+  if(id_trama == 5)
+  {
+    make_trama(5,0);
+    send_trama();
+    flag_inicio = 0;
+    actuadores_off();
+    goto fin_programa;
+  }
+  
+  if((id_trama == 4) || (flag_inicio == 1))
+  {
+    make_trama(4,0);
+    send_trama();
+    flag_inicio = 1;
+  }
+  else
+  {
+    goto fin_programa;
+  }
+  */
 
 
 
