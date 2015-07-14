@@ -4,8 +4,8 @@
 #include <manual_control.h>
 
 //Prueba filtro
-byte sensor_ph_sin_filtro;
-float NewSample2;
+float sensor_ph_sin_filtro;
+float NewSamp;
 //float NewSample;
 // comentario prueba
 // comentario 2
@@ -95,6 +95,8 @@ byte estado_led3;
 byte output_state;
 /*Variables propias del sensor pH*/
 float sensor_ph_value;
+float sensor_ph_value_float;
+float sensor_ph_value_volt;
 byte flag_ph1;
 byte flag_ph2;
 byte flag_ph3;
@@ -406,20 +408,15 @@ byte set_calibracion(byte flag_c)
     { 
       if(aux1_cal == 1) //calibracion pH4
       {
-        sensor_ph_4_cal = sensor_ph_value; //lectura pH4 de bit a milivolts
+        sensor_ph_4_cal = sensor_ph_value_volt; //lectura pH4 de bit a milivolts
         flag_ph1 = 1;
        // digitalWrite(led1,HIGH);
       }
       else if(aux1_cal == 2) //calibracion con pH7
       {
-        sensor_ph_7_cal = sensor_ph_value; //lectura pH4 de bit a milivolts
+        sensor_ph_7_cal = sensor_ph_value_volt; //lectura pH4 de bit a milivolts
         flag_ph2 = 1;
        // digitalWrite(led2,HIGH);
-      }
-      else if(aux1_cal == 3) //calibracion con pH10
-      {
-        sensor_ph_10_cal = sensor_ph_value; //lectura pH4 de bit a milivolts
-        flag_ph3 = 1;
       }
       
       if((flag_ph1 == 1) && (flag_ph2 == 1))
@@ -427,12 +424,6 @@ byte set_calibracion(byte flag_c)
         paso_ph_cal = ((7 - 4) / (sensor_ph_7_cal - sensor_ph_4_cal)); // pH/Volt paso para cotrolador y adapatdor de 4-20 mA, voltaje referencia ADC igual a 4.85 Volts
         flag_ph1 = 0;
         flag_ph2 = 0;
-      }
-      if((flag_ph2 == 1) && (flag_ph3 == 1))
-      {
-        paso_ph_cal = ((10 - 7) / (sensor_ph_10_cal - sensor_ph_7_cal)); // pH/Volt paso para cotrolador y adapatdor de 4-20 mA, voltaje referencia ADC igual a 4.85 Volts
-        flag_ph2 = 0;
-        flag_ph3 = 0;
       }
       
       break;
@@ -455,12 +446,6 @@ byte set_calibracion(byte flag_c)
         flag_ph2_cont = 1;
         //digitalWrite(led2,HIGH);
       }
-      else if(aux1_cal == 6) //calibracion con pH7
-      {
-        controlador_ph10_cal = controlador_ph_value; //lectura pH4 de bit a milivolts
-        flag_ph3_cont = 1;
-        //digitalWrite(led2,HIGH);
-      }
       
       if((flag_ph1_cont == 1) && (flag_ph2_cont == 1))
       {
@@ -468,13 +453,7 @@ byte set_calibracion(byte flag_c)
         flag_ph1_cont = 0;
         flag_ph2_cont = 0;
         //digitalWrite(led3,HIGH);
-      }
-      if((flag_ph2_cont == 1) && (flag_ph3_cont == 1))
-      {
-        paso_ph_cont = ((10 - 7) / (controlador_ph10_cal - controlador_ph7_cal)); // pH/Volt paso para cotrolador y adapatdor de 4-20 mA, voltaje referencia ADC igual a 4.85 Volts
-        flag_ph2_cont = 0;
-        flag_ph3_cont = 0;
-        //digitalWrite(led3,HIGH);
+ 
       }
       break;     
     }
@@ -560,35 +539,16 @@ float procesar_datos(byte canal, float NewSample)
       {
         y_sph[0] += (ACoef_sph[n] * x_sph[n]) - (BCoef_sph[n] * y_sph[n]);
       }
-       
-   //   output_ph = y_sph[0] * (voltaje_ref_ADC / 1024);
       
-   //   output_ph = (paso_ph_cal * output_ph) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH   
+      NewSamp = NewSample;
+               
+      sensor_ph_value_volt  =  y_sph[0] * (voltaje_ref_ADC / 1024);
+      sensor_ph_value_float  = (paso_ph_cal * sensor_ph_value_volt) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH                                                   // decimas a entero para enviar como (byte)
+      output_ph = sensor_ph_value_float;
+      
+      sensor_ph_sin_filtro = (NewSamp) * (voltaje_ref_ADC / 1024);
+      sensor_ph_sin_filtro  = (paso_ph_cal * sensor_ph_sin_filtro) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH     
      
-     
-   //    sensor_ph_sin_filtro = NewSample * (voltaje_ref_ADC / 1024);
-   //    sensor_ph_sin_filtro  = (paso_ph_cal * sensor_ph_sin_filtro) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH   
-      
-      output_ph = y_sph[0];
-      NewSample2 = NewSample;
-      
-      /*shift the old samples
-      for(int g = 100; g > 0; g--)   //a 0.06 seg por muestra el arreglo para 100 muestras se llena en 6 (s)//rellenar arreglo utilizando incrementador seconds (sugerencia no validada)
-      {
-         arreglo_ph[g] = arreglo_ph[g-1];
-      }
-      arreglo_ph[0] = sens1_read;
-      
-      for (int g = 0; g < 100; g++)
-      {
-          suma_ph = suma_ph + arreglo_ph[g];
-      }
-      promedio_ph = suma_ph / 100;
-      suma_ph = 0;
-      
-      sensor_ph_value         = promedio_ph * (voltaje_ref_ADC / 1024);
-      sensor_ph_value         = (paso_ph_cal * sensor_ph_value) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH                                                   // decimas a entero para enviar como (byte)
-      */
       return output_ph; 
       break;
     }
@@ -742,19 +702,10 @@ byte make_trama(byte a,byte b)
   id_trama_tx = a;                          // normal = 1, confirm = 2
   estado_tx   = b;                          // envia estado q se recibiò o incrementador para trama normal
   //sens1_tx    = sensor_ph_value * 10;       // decimas a entero para enviar como (byte)
-  sens1_tx    = sensor_ph_value/4;
-  
-  sensor_ph_value  =  sensor_ph_value * (voltaje_ref_ADC / 1024);
-  sensor_ph_value  = (paso_ph_cal * sensor_ph_value) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH                                                   // decimas a entero para enviar como (byte)
-
-  sens2_tx    = sensor_ph_value;
-  sens3_tx    = NewSample2/4;//controlador_ph_value * 10;  // decimas a entero para enviar como (byte)
-  
-  sensor_ph_sin_filtro = NewSample2 * (voltaje_ref_ADC / 1024);
-  sensor_ph_sin_filtro  = (paso_ph_cal * sensor_ph_sin_filtro) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH   
-      
-  
-  sens4_tx    = sensor_ph_sin_filtro;
+  sens1_tx    = (y_sph[0]) / 4;  
+  sens2_tx    = sensor_ph_value * 10;
+  sens3_tx    = NewSamp / 4;//controlador_ph_value * 10;  // decimas a entero para enviar como (byte)  
+  sens4_tx    = sensor_ph_sin_filtro * 10;
   sens5_tx    = 0;
   aux_tx      = output_state;               //Estado de los relay (Encendido = 1 / Apagado = 0)
   eof_tx      = '%';
@@ -772,6 +723,7 @@ void send_trama()
   Serial.write(sens5_tx);
   Serial.write(aux_tx);
   Serial.write(eof_tx); 
+
 }
 
 int read_trama()
@@ -829,6 +781,7 @@ void loop()
         make_trama(1,0);   // id_trama = 1 trama de set point
         send_trama(); 
         id_trama_ok = 1;
+        id_trama = 0;
         break;
       } 
       case(2): //trama = manual
@@ -890,7 +843,7 @@ void loop()
     // Si id_trama(1) = control  && (1seg / 0.01 seg) = 100, condicion if cada 1 seg.
     /*-Solo se tendra estado manual o automatico, no se podra tener una variable con control automatico y otra con control manual*/
     
-    if(id_trama == 1)   
+    if(id_trama_ok == 1)   
     { 
       switch(aux2_sp)
       {
