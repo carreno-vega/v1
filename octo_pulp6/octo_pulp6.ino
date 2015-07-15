@@ -246,7 +246,7 @@ void setup()
   flag_ph2 = 0;
   flag_ph3 = 0;
   paso_ph_cal = 20;  //paso inicial referencial, luego en funcion calibracion se toma el valor real del paso de pH 
-  sensor_ph_7_cal = 1; //Valor inicial referencial para el voltaje en ADC para el sensor de pH igual a 7
+  sensor_ph_7_cal = 0.9; //Valor inicial referencial para el voltaje en ADC para el sensor de pH igual a 7
   /*
   50mv/pH referencia
   1 V offset del sumador
