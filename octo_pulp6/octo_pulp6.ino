@@ -2,7 +2,9 @@
 #include <avr/interrupt.h>
 #include <act_off.h>
 #include <manual_control.h>
+#include <EEPROM.h>
 
+int ok_calibracion;
 //Prueba filtro
 float sensor_ph_sin_filtro;
 float NewSamp;
@@ -162,6 +164,7 @@ byte aux1_sens_or_cont;  //aux2_sp quinto BIT 0 para sensor auxiliar_1 y 1 para 
 
 void setup()
 {
+  ok_calibracion = 0;
   //PRueba sin filtro
   sensor_ph_sin_filtro = 0;
   
@@ -380,7 +383,6 @@ void set_point()
   {
     digitalWrite(led3,LOW);
   }
-  
   if (controlador_ph_value <= ph_sp)
   {
     digitalWrite(led2,HIGH);
@@ -388,8 +390,7 @@ void set_point()
   else if(controlador_ph_value >= (ph_sp + 0.2))  //histeresis de 0.2 ph hacia arriba
   {
     digitalWrite(led2,LOW);
-  }
-  
+  }  
   if (sensor_ptc_value <= (temp_sp - 1.5))  // histeresis entre set point -0.3 y set point - 0.1.
   {
     digitalWrite(led,HIGH);
@@ -408,15 +409,26 @@ byte set_calibracion(byte flag_c)
     { 
       if(aux1_cal == 1) //calibracion pH4
       {
-        sensor_ph_4_cal = sensor_ph_value_volt; //lectura pH4 de bit a milivolts
+        sensor_ph_4_cal = sensor_ph_value_volt; //valor de ph en Volt filtrado.
+        
+        // SET CAL VAL ON EEMPROM
+        int val_cal4 = (sensor_ph_4_cal * 100) / 2;  // Max 4.85V -> 485 / 2 -> 242.5 to int -> 242 (CAL VAL)
+        EEPROM.write(12,val_cal4);                   // Escribe en el sector 12, el valor de calibración de ph4
+        EEPROM.write(10,1);                          // Confirma que la calibración es completa. (En SW primero ocurre calibración 7, luego 4. Por eso la confirmación en ph 4).
+        // END SET CAL VAL ON EEMPROM
+        
         flag_ph1 = 1;
-       // digitalWrite(led1,HIGH);
       }
       else if(aux1_cal == 2) //calibracion con pH7
       {
-        sensor_ph_7_cal = sensor_ph_value_volt; //lectura pH4 de bit a milivolts
+        sensor_ph_7_cal = sensor_ph_value_volt; //valor de ph en Volt filtrado.
+        
+        // SET CAL VAL ON EEMPROM
+        int val_cal7 = (sensor_ph_7_cal * 100) / 2;  // Max 4.85V -> 485 / 2 -> 242.5 to int -> 242 (CAL VAL)
+        EEPROM.write(14,val_cal7);                   // Escribe en el sector 14, el valor de calibración de ph7
+        // END SET CAL VAL ON EEMPROM
+        
         flag_ph2 = 1;
-       // digitalWrite(led2,HIGH);
       }
       
       if((flag_ph1 == 1) && (flag_ph2 == 1))
@@ -438,13 +450,11 @@ byte set_calibracion(byte flag_c)
       {
         controlador_ph4_cal = controlador_ph_value; //lectura pH4 de bit a milivolts
         flag_ph1_cont = 1;
-       // digitalWrite(led1,HIGH);
       }
       else if(aux1_cal == 5) //calibracion con pH7
       {
         controlador_ph7_cal = controlador_ph_value; //lectura pH4 de bit a milivolts
         flag_ph2_cont = 1;
-        //digitalWrite(led2,HIGH);
       }
       
       if((flag_ph1_cont == 1) && (flag_ph2_cont == 1))
@@ -452,8 +462,6 @@ byte set_calibracion(byte flag_c)
         paso_ph_cont = ((7 - 4) / (controlador_ph7_cal - controlador_ph4_cal)); // pH/Volt paso para cotrolador y adapatdor de 4-20 mA, voltaje referencia ADC igual a 4.85 Volts
         flag_ph1_cont = 0;
         flag_ph2_cont = 0;
-        //digitalWrite(led3,HIGH);
- 
       }
       break;     
     }
@@ -758,6 +766,24 @@ ISR(TIMER1_COMPA_vect)   //Flag correspondiente a timer1 comparacion
 /*-------------------------------------------------------------------LOOP--*/
 void loop()
 {
+  // CHECK CALIBRATION
+  if (ok_calibration == 0)
+  {
+    int aux_eemprom = EEPROM.read(10);                               // Lee indicador de historial de calibración (1: Ya se ha calibrado, 2: No se ha calibrado)
+    if (aux_eeprom == 1)                                             // Ha sido calibrado y sus datos están almacenados.
+    {
+      sensor_ph_4_cal = (EEPROM.read(12) * 2) / 100;                 // Valor de calibración almacenado para pH 4 (* 100 / 2)
+      sensor_ph_7_cal = (EEPROM.read(14) * 2) / 100;                 // Valor de calibración almacenado para pH 7 (* 100 / 2)
+      paso_ph_cal = ((7 - 4) / (sensor_ph_7_cal - sensor_ph_4_cal))  // Almacena el paso y los valores de calibración en variables globales.
+      ok_calibration = 1;                                            // Flag para que evalúe sólo 1 vez.
+    }
+    else
+    {
+      // Es necesario calibrar.
+    }
+  }
+  
+  // END CHECK CALIBRATIO
   if(timer_loop == 10)  //cada 100 (ms)
   {
     if (Serial.available() > 0)
