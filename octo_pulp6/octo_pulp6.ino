@@ -4,6 +4,7 @@
 #include <manual_control.h>
 
 //Prueba filtro
+float actual_ph,anterior_ph;
 float sensor_ph_sin_filtro;
 float NewSamp;
 //float NewSample;
@@ -162,6 +163,7 @@ byte aux1_sens_or_cont;  //aux2_sp quinto BIT 0 para sensor auxiliar_1 y 1 para 
 
 void setup()
 {
+  anterior_ph = actual_ph = 0;
   //PRueba sin filtro
   sensor_ph_sin_filtro = 0;
   
@@ -526,7 +528,8 @@ float procesar_datos(byte canal, float NewSample)
   {
     case(1):  // CANAL DE sensor PH
     {
-      for(int n = NCoef_sph; n > 0; n --) //Desplazo de la muestra mas antigua
+      
+      /*for(int n = NCoef_sph; n > 0; n --) //Desplazo de la muestra mas antigua
       {
         x_sph[n] = x_sph[n-1];
         y_sph[n] = y_sph[n-1];
@@ -539,16 +542,18 @@ float procesar_datos(byte canal, float NewSample)
       {
         y_sph[0] += (ACoef_sph[n] * x_sph[n]) - (BCoef_sph[n] * y_sph[n]);
       }
-      
+      */
+      actual_ph = 0.01 * NewSample + anterior_ph * 0.99;
       NewSamp = NewSample;
                
-      sensor_ph_value_volt  =  y_sph[0] * (voltaje_ref_ADC / 1024);
+      sensor_ph_value_volt  =  actual_ph * (voltaje_ref_ADC / 1024);
       sensor_ph_value_float  = (paso_ph_cal * sensor_ph_value_volt) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH                                                   // decimas a entero para enviar como (byte)
       output_ph = sensor_ph_value_float;
       
       sensor_ph_sin_filtro = (NewSamp) * (voltaje_ref_ADC / 1024);
       sensor_ph_sin_filtro  = (paso_ph_cal * sensor_ph_sin_filtro) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH     
      
+      anterior_ph = actual_ph;
       return output_ph; 
       break;
     }
@@ -702,7 +707,7 @@ byte make_trama(byte a,byte b)
   id_trama_tx = a;                          // normal = 1, confirm = 2
   estado_tx   = b;                          // envia estado q se recibiò o incrementador para trama normal
   //sens1_tx    = sensor_ph_value * 10;       // decimas a entero para enviar como (byte)
-  sens1_tx    = (y_sph[0]) / 4;  
+  sens1_tx    = actual_ph / 4;  
   sens2_tx    = sensor_ph_value * 10;
   sens3_tx    = NewSamp / 4;//controlador_ph_value * 10;  // decimas a entero para enviar como (byte)  
   sens4_tx    = sensor_ph_sin_filtro * 10;
@@ -758,7 +763,7 @@ ISR(TIMER1_COMPA_vect)   //Flag correspondiente a timer1 comparacion
 /*-------------------------------------------------------------------LOOP--*/
 void loop()
 {
-  if(timer_loop == 10)  //cada 100 (ms)
+  if(timer_loop == 5)  //cada 100 (ms)
   {
     if (Serial.available() > 0)
     {   
