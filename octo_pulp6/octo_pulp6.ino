@@ -4,9 +4,7 @@
 #include <manual_control.h>
 #include <EEPROM.h>
 
-//Variables para almacenamiento en EEPROM valores de calibración sensores
-byte ok_calibration;
-int aux_eeprom;
+int ok_calibracion;
 //Prueba filtro
 float sensor_ph_sin_filtro;
 float NewSamp;
@@ -166,8 +164,7 @@ byte aux1_sens_or_cont;  //aux2_sp quinto BIT 0 para sensor auxiliar_1 y 1 para 
 
 void setup()
 {
-  //Variable datos de calibracion en EEPROM
-  ok_calibration = 0;
+  ok_calibracion = 0;
   //PRueba sin filtro
   sensor_ph_sin_filtro = 0;
   
@@ -772,15 +769,13 @@ void loop()
   // CHECK CALIBRATION
   if (ok_calibration == 0)
   {
-    aux_eeprom = EEPROM.read(10);                                   // Lee indicador de historial de calibración (1: Ya se ha calibrado, 2: No se ha calibrado)
+    int aux_eemprom = EEPROM.read(10);                               // Lee indicador de historial de calibración (1: Ya se ha calibrado, 2: No se ha calibrado)
     if (aux_eeprom == 1)                                             // Ha sido calibrado y sus datos están almacenados.
     {
       sensor_ph_4_cal = (EEPROM.read(12) * 2) / 100;                 // Valor de calibración almacenado para pH 4 (* 100 / 2)
       sensor_ph_7_cal = (EEPROM.read(14) * 2) / 100;                 // Valor de calibración almacenado para pH 7 (* 100 / 2)
-      paso_ph_cal = ((7 - 4) / (sensor_ph_7_cal - sensor_ph_4_cal));  // Almacena el paso y los valores de calibración en variables globales.
+      paso_ph_cal = ((7 - 4) / (sensor_ph_7_cal - sensor_ph_4_cal))  // Almacena el paso y los valores de calibración en variables globales.
       ok_calibration = 1;                                            // Flag para que evalúe sólo 1 vez.
-      make_trama(7,0);                                               //Hay datos de calibracion en memoria id_trama = 7
-      send_trama();                                                  //Enviar trama 
     }
     else
     {
