@@ -784,6 +784,9 @@ void loop()
     }
     else
     {
+      make_trama(8,0);
+      send_trama();
+      ok_calibration = 1; ´´
       // Es necesario calibrar.
     }
   }
