@@ -2,11 +2,17 @@
 #include <avr/interrupt.h>
 #include <act_off.h>
 #include <manual_control.h>
+#include <EEPROM.h>
 
+
+//EEPROM
+int aux_eeprom;
+byte ok_calibration;
 //Prueba filtro
 float actual_ph,anterior_ph;
 float sensor_ph_sin_filtro;
 float NewSamp;
+float value_fst_sph;
 //float NewSample;
 // comentario prueba
 // comentario 2
@@ -163,6 +169,8 @@ byte aux1_sens_or_cont;  //aux2_sp quinto BIT 0 para sensor auxiliar_1 y 1 para 
 
 void setup()
 {
+  //eeprom
+  ok_calibration = 0;
   anterior_ph = actual_ph = 0;
   //PRueba sin filtro
   sensor_ph_sin_filtro = 0;
@@ -410,13 +418,25 @@ byte set_calibracion(byte flag_c)
     { 
       if(aux1_cal == 1) //calibracion pH4
       {
-        sensor_ph_4_cal = sensor_ph_value_volt; //lectura pH4 de bit a milivolts
+        sensor_ph_4_cal = sensor_ph_value_volt; //lectura pH4 de bit a milivolts     
+        int ph4_dec = actual_ph; //0 a 1023
+        byte ph4_dec_lsb = 0xFF & ph4_dec;
+        byte ph4_dec_msb = 0xFF & (ph4_dec >> 8);
+        EEPROM.write(12,ph4_dec_lsb);
+        EEPROM.write(14,ph4_dec_msb);
+        // END SET CAL VAL ON EEMPROM
         flag_ph1 = 1;
        // digitalWrite(led1,HIGH);
       }
       else if(aux1_cal == 2) //calibracion con pH7
       {
         sensor_ph_7_cal = sensor_ph_value_volt; //lectura pH4 de bit a milivolts
+        // SET CAL VAL ON EEMPROM
+        int ph7_dec = actual_ph; //0 a 1023
+        byte ph7_dec_lsb = 0xFF & ph7_dec;
+        byte ph7_dec_msb = 0xFF & (ph7_dec >> 8);
+        EEPROM.write(16,ph7_dec_lsb);
+        EEPROM.write(18,ph7_dec_msb);
         flag_ph2 = 1;
        // digitalWrite(led2,HIGH);
       }
@@ -529,25 +549,11 @@ float procesar_datos(byte canal, float NewSample)
     case(1):  // CANAL DE sensor PH
     {
       
-      /*for(int n = NCoef_sph; n > 0; n --) //Desplazo de la muestra mas antigua
-      {
-        x_sph[n] = x_sph[n-1];
-        y_sph[n] = y_sph[n-1];
-      }
-      
-      x_sph[0] = NewSample;                     //nuevo valor input
-      y_sph[0] = ACoef_sph[0] * x_sph[0];       //nuevo valor output    
-      //Filtro IIR 
-      for(int n = 1; n <= NCoef_sph; n ++)
-      {
-        y_sph[0] += (ACoef_sph[n] * x_sph[n]) - (BCoef_sph[n] * y_sph[n]);
-      }
-      */
-      actual_ph = 0.01 * NewSample + anterior_ph * 0.99;
-      NewSamp = NewSample;
-               
+      actual_ph = 0.1 * NewSample + anterior_ph * 0.9;
+
+      NewSamp = NewSample;      
       sensor_ph_value_volt  =  actual_ph * (voltaje_ref_ADC / 1024);
-      sensor_ph_value_float  = (paso_ph_cal * sensor_ph_value_volt) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH                                                   // decimas a entero para enviar como (byte)
+      sensor_ph_value_float = (paso_ph_cal * sensor_ph_value_volt) - (paso_ph_cal * sensor_ph_7_cal) + 7;    //voltaje a pH                                                   // decimas a entero para enviar como (byte)
       output_ph = sensor_ph_value_float;
       
       sensor_ph_sin_filtro = (NewSamp) * (voltaje_ref_ADC / 1024);
@@ -763,7 +769,7 @@ ISR(TIMER1_COMPA_vect)   //Flag correspondiente a timer1 comparacion
 /*-------------------------------------------------------------------LOOP--*/
 void loop()
 {
-  if(timer_loop == 5)  //cada 100 (ms)
+  if(timer_loop == 10)  //cada 100 (ms)
   {
     if (Serial.available() > 0)
     {   
@@ -825,6 +831,21 @@ void loop()
         id_trama_ok = 0;
         id_trama = 0;
         break;
+      }
+      case(7):
+      {
+        byte ph4_lsb = EEPROM.read(12);                 // Valor de calibración almacenado para pH 4 (* 100 / 2)
+        byte ph4_msb = EEPROM.read(14); 
+        sensor_ph_4_cal = ((ph4_msb << 8) + ph4_lsb) * (voltaje_ref_ADC / 1024);
+        byte ph7_lsb = EEPROM.read(16);                 // Valor de calibración almacenado para pH 4 (* 100 / 2)
+        byte ph7_msb = EEPROM.read(18); 
+        sensor_ph_7_cal = ((ph7_msb << 8) + ph7_lsb) * (voltaje_ref_ADC / 1024);
+        paso_ph_cal = (float)((7 - 4) / (sensor_ph_7_cal - sensor_ph_4_cal));  // Almacena el paso y los valores de calibración en variables globales.
+        ok_calibration = 1; 
+        id_trama_ok = 0;
+        id_trama = 0;                                   
+        //make_trama(7,0);                                               //Hay datos de calibracion en memoria id_trama = 7
+        //send_trama();
       }
       default:break;
     }
