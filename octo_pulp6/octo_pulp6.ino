@@ -80,12 +80,14 @@ byte  sens5_tx;
 byte  aux_tx;
 byte  eof_tx;
 /*Declaracion entradas analogas para sensores*/
-byte controlador_ph   = A0;  //Lectura controlador pH       4-20 mA a 1- 5   Volts en entrada analoga A0
-byte controlador_aux  = A1;  //Lectura controlador auxiliar 4-20 mA a 1- 5   Volts en entrada analoga A1
-byte sensor_ptc       = A2;  //Lectura sensor temperatura PTC en entrada analoga A2
-byte sensor_ph        = A4; //Lectura sensor PH   (Ver en que entrada analoga se conecta el sensor A3 o A4)
-byte sensor_aux       = A3; //Lectura sensor auxiliar
-byte adc_input        = A5; //Lectura ADC
+
+byte adc_input        = A0;  //Lectura ADC A0
+byte sensor_aux       = A1;  //Lectura sensor auxiliar
+byte sensor_ph        = A2;  //Lectura sensor PH   (Ver en que entrada analoga se conecta el sensor A1 o A2)
+byte sensor_ptc       = A3;  //Lectura sensor temperatura PTC en entrada analoga A3
+byte controlador_ph   = A4;  //Lectura controlador pH       4-20 mA a 1- 5   Volts en entrada analoga A4
+byte controlador_aux  = A5;  //Lectura controlador auxiliar 4-20 mA a 1- 5   Volts en entrada analoga A5
+
 float voltaje_ref_ADC;  
 /**/
 float sens1_read;
