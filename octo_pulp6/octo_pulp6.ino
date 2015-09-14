@@ -101,22 +101,29 @@ byte aux2_cal;
 byte aux3_cal; 
 
 /*Variables de Configuración*/
-byte sens0_num_act  = arreglo[3];
-byte sens1_num_act  = arreglo[4];
-byte sens2_num_act  = arreglo[5]; 
-byte sens3_num_act  = arreglo[6];
-byte sens4_num_act  = arreglo[7];
-byte sens5_num_act  = arreglo[8];
-byte aux1_config = arreglo[9];
-byte aux2_config = arreglo[10];
-byte aux3_config = arreglo[11];
-byte aux4_config = arreglo[12];
-byte aux5_config = arreglo[13];
-byte aux6_config = arreglo[14];
-byte aux7_config = arreglo[15];
-byte aux8_config = arreglo[16];
-byte aux9_config = arreglo[17];
+byte sens0_act_noa;
+byte sens1_act_noa;
+byte sens2_act_noa;
+byte sens3_act_noa;
+byte sens4_act_noa;
+byte sens5_act_noa;
+byte aux1_config;
+byte aux2_config;
+byte aux3_config;
+byte aux4_config;
+byte aux5_config;
+byte aux6_config;
+byte aux7_config;
+byte aux8_config;
+byte aux9_config;
 
+/* Variables funcion asignacciond e actuadores sensor_actuador() */
+byte sens0_act_asi;   //sensor A0 - actuador - no  asignado
+byte sens1_act_asi;
+byte sens2_act_asi; 
+byte sens3_act_asi;
+byte sens4_act_asi;
+byte sens5_act_asi;
 /*Variables enviadas*/
 
 byte  sof_tx;
@@ -263,12 +270,6 @@ int arreglo_temp[100];
 int arreglo_cont_aux[100];
 */
 
-/* Varibales identificador sensor o actuador*/
-byte ph_sens_or_cont;    //aux2_sp primer BIT 0 para sensor pH y 1 para controlador pH 
-byte OD_sens_or_cont;    //aux2_sp segund BIT 0 para sensor OD y 1 para controlador OD
-byte temp_sens_or_cont;  //aux2_sp tercer BIT 0 para sensor Temperatura y 1 para controlador Temperatura
-byte rpm_sens_or_cont;   //aux2_sp cuarto BIT 0 para sensor RPM y 1 para controlador RPM
-byte aux1_sens_or_cont;  //aux2_sp quinto BIT 0 para sensor auxiliar_1 y 1 para controlador auxiliar_1.  
 
 void setup()
 {
@@ -397,21 +398,30 @@ int  actuador_D11 = 11;  //Relé 4 D11 en arduino_xbee
   sens5_sp = 0;
   
     /*Valores configuración*/
-  sens0_num_act   = 0;
-  sens1_num_act  = 0;
-  sens2_num_act   = 0;
-  sens3_num_act   = 0;
-  sens4_num_act   = 0;
-  sens5_num_act   = 0;
-  aux1_config = 0;
-  aux2_config = 0;
-  aux3_config = 0;
-  aux4_config = 0;
-  aux5_config = 0;
-  aux6_config = 0;
-  aux7_config = 0;
-  aux8_config = 0;
-  aux9_config = 0;  
+  sens0_act_noa  = 0;   //sensor A0 - actuador - no  asignado
+  sens1_act_noa  = 0;
+  sens2_act_noa  = 0; 
+  sens3_act_noa  = 0;
+  sens4_act_noa  = 0;
+  sens5_act_noa  = 0;
+  aux1_config    = 0;
+  aux2_config    = 0;
+  aux3_config    = 0;
+  aux4_config    = 0;
+  aux5_config    = 0;
+  aux6_config    = 0;
+  aux7_config    = 0;
+  aux8_config    = 0;
+  aux9_config    = 0;  
+  
+  //Funcion asignación de actuador al respectivo sensor
+  sens0_act_asi  = 0;   //sensor A0 - actuador - no  asignado
+  sens1_act_asi  = 0;
+  sens2_act_asi  = 0; 
+  sens3_act_asi  = 0;
+  sens4_act_asi  = 0;
+  sens5_act_asi  = 0;
+  
   
   
   flag_ph1_cont = 0;
@@ -499,7 +509,13 @@ int deco_trama()
 /* ID TRAMA
 1	Trama de setpoint
 2	Trama de control manual
-3	Trama de calibraciòn*/
+3	Trama de calibraciòn
+4       Trama de inicio de programa
+5       Trama de apagado de actuadore
+6       Trama de error recepción de datos
+7       Trama de lectura valores de calibración EEPROM
+8       Trama de configuración
+*/
   id_trama    = arreglo[1];
   estado_rx   = arreglo[2];   // Incrementador
   switch(id_trama)
@@ -519,9 +535,10 @@ int deco_trama()
       sens5_h_sp  = arreglo[13];  
       sens5_l_sp  = arreglo[14];  
       aux_sp      = arreglo[15];
-      aux1_sp     = arreglo[16];     //tiempo en minutos para ejecucion de trama especial set point solo para case(1) y case(2).
-      aux2_sp     = arreglo[17];     //Tipo de set poin, 1 = , 2 = , 3= Setpoint manual
-   
+      aux1_sp     = arreglo[16];    
+      aux2_sp     = arreglo[17];     
+      
+      //Union de byte alto con byte bajo para valor de set point  de 0 a 1023 
       sens0_sp = (sens0_h_sp << 8) + sens0_l_sp;
       sens1_sp = (sens1_h_sp << 8) + sens1_l_sp;
       sens2_sp = (sens2_h_sp << 8) + sens2_l_sp;
@@ -542,7 +559,7 @@ int deco_trama()
     }
     case(2): //trama = manual
     { 
-      inst1_man     = arreglo[3];  // Libreria control manual->Si es 0=off calentar, 1= on calentar, 2=off auxiliar 3=on auxiliar, 4=off agitador 5= on agitador, 6= off compresor 7=on compresor 8= off bomba 9= on bomba
+      inst1_man     = arreglo[3];  //Si es 0=off calentar, 1= on calentar, 2=off auxiliar 3=on auxiliar, 4=off agitador 5= on agitador, 6= off compresor 7=on compresor 8= off bomba 9= on bomba
       inst2_man     = arreglo[4];  
       inst3_man     = arreglo[5];  
       inst4_man     = arreglo[6];  
@@ -578,40 +595,15 @@ int deco_trama()
       aux3_cal   = arreglo[17]; 
       break;
     }
-    case(4):  //trama=configuración actuadores
+    case(8):  //trama=configuración actuadores
     {
-      sens0_num_act  = arreglo[3];
-      sens1_num_act  = arreglo[4];
-      sens2_num_act  = arreglo[5]; 
-      sens3_num_act  = arreglo[6];
-      sens4_num_act  = arreglo[7];
-      sens5_num_act  = arreglo[8];
-      
-      if(arreglo[3] >> 0)
-      {
-        sens0_num_act  = arreglo[3] + 7;
-      }
-      if(arreglo[4] >> 0)
-      {
-        sens1_num_act  = arreglo[4] + 7;
-      }
-      if(arreglo[5] >> 0)
-      {
-        sens2_num_act  = arreglo[5] + 7;
-      }
-      if(arreglo[6] >> 0)
-      {
-        sens3_num_act  = arreglo[6] + 7;
-      }
-      if(arreglo[7] >> 0)
-      {
-        sens4_num_act  = arreglo[7] + 7;
-      }
-      if(arreglo[8] >> 0)
-      {
-        sens5_num_act  = arreglo[8] + 7;
-      }
-  
+      sens0_act_noa  = arreglo[3];    //ADC
+      sens1_act_noa  = arreglo[4];    
+      sens2_act_noa  = arreglo[5]; 
+      sens3_act_noa  = arreglo[6];
+      sens4_act_noa  = arreglo[7];
+      sens5_act_noa  = arreglo[8];
+
       aux1_config   = arreglo[9];
       aux2_config   = arreglo[10];
       aux3_config   = arreglo[11];
@@ -620,25 +612,154 @@ int deco_trama()
       aux6_config   = arreglo[14];
       aux7_config   = arreglo[15];
       aux8_config   = arreglo[16];
-      aux9_config   = arreglo[17];
-      
+      aux9_config   = arreglo[17]; 
     }
     default:break;  
   }
 }
 
+void sensor_actuador() 
+{      
+  //Si sens_act_noa = 0, no se le asigna ningun actuador, si ya tiene un actuador asignado este vuelve a no tener asignación.
+  if(sens0_act_noa > 0)
+  {
+    sens0_act_asi = sens0_act_noa + 7;
+  }
+  else if(sens0_act_noa = 0)
+  {
+    sens0_act_asi = 0;
+  }
+  
+  if(sens1_act_noa > 0)
+  {
+    sens1_act_asi  = sens1_act_noa + 7;
+  }
+  else if(sens1_act_noa = 0)
+  {
+    sens1_act_asi = 0;
+  }
+  
+  if(sens2_act_noa > 0)
+  {
+    sens2_act_asi  = sens2_act_noa + 7;
+  }
+  else if(sens2_act_noa = 0)
+  {
+    sens2_act_asi = 0;
+  }
+  
+  if(sens3_act_noa > 0)
+  {
+    sens3_act_asi  = sens3_act_noa + 7;
+  }
+  else if(sens3_act_noa = 0)
+  {
+    sens3_act_asi = 0;
+  }
+  
+  if(sens4_act_noa > 0)
+  {
+    sens4_act_asi = sens4_act_noa  + 7;
+  }
+  else if(sens4_act_noa = 0)
+  {
+    sens4_act_asi = 0;
+  }
+  
+  if(sens5_act_noa  > 0)
+  {
+    sens5_act_noa  = sens5_act_noa + 7;
+  }
+  else if(sens5_act_noa = 0)
+  {
+    sens5_act_asi = 0;
+  }
+}
+//Lectura ADC A0
+//A1 Lectura sensor auxiliar
+//A2 Lectura sensor PH   (Ver en que entrada analoga se conecta el sensor A1 o A2)
+//A3 Lectura sensor temperatura PTC en entrada analoga A3
+//A4 Lectura controlador pH       4-20 mA a 1- 5   Volts en entrada analoga A4
+//A5 Lectura controlador auxiliar 4-20 mA a 1- 5   Volts en entrada analoga A5
 
-
+/*void control_manual(byte flag_control_m)
+{
+  switch(flag_control_m)
+  {
+    case(0):  // Actuador pt100 - Calentador OFF
+    { 
+      digitalWrite(sens3_act_asi,LOW);
+      break;
+    }
+    case(1):  // Actuador pt100 - Calentador ON
+    { 
+      digitalWrite(sens3_act_asi,HIGH);
+      break;
+    }
+    case(2):  // BNC Auxiliar OFF
+    { 
+      digitalWrite(sens1_act_asi,LOW);
+      break;
+    }
+    case(3):  // BNC Auxiliar ON
+    { 
+      digitalWrite(sens1_act_asi,LOW);
+      break;
+    }
+    case(4):  // Agitador OFF
+    { 
+      digitalWrite(sens4_act_asi,LOW);
+      break;
+    }
+    case(5):  // Agitador ON
+    { 
+      digitalWrite(sens4_act_asi,HIGH);
+      break;
+    }
+    case(6):  // Compresor OFF
+    { 
+      digitalWrite(sens5_act_asi,LOW);
+      break;
+    }
+    case(7):  // Compresor ON
+    { 
+      digitalWrite(sens5_act_asi,HIGH);
+      break;
+    }
+    case(8):  // Bomba OFF
+    { 
+      digitalWrite(sens2_act_asi,LOW);
+      break;
+    }
+    case(9):  // Bomba ON
+    { 
+      digitalWrite(sens2_act_asi,HIGH);
+      break;
+    }
+    case(10):  //  controlador ADC
+    { 
+      digitalWrite(sens0_act_asi,LOW);
+      break;
+    }
+    case(11):  // Controlador ADC
+    { 
+      digitalWrite(sens0_act_asi,HIGH);
+      break;
+    }
+    default:break;
+  }
+}
+*/
 /*
 void set_point()
 {
   if (sens0_pros <= sens0_sp)    //Set point para entrada ADC
   {
-    digitalWrite(sens0_num_act,HIGH);
+    digitalWrite(sens0_act_asi,HIGH);
   }
   else if(sens0_pros >= sens0_sp)  
   {
-    digitalWrite(sens0_num_act,LOW);
+    digitalWrite(sens0_act_asi,LOW);
   }
   
   if (controlador_ph_value <= ph_sp)
@@ -660,6 +781,7 @@ void set_point()
   }
 }
 */
+
 
 byte set_calibracion(byte flag_c)
 {
@@ -1005,7 +1127,7 @@ void variables_reset()
 }
 
 
-void estado_output()
+void estado_output()  //Estado de los Rele - salidas digitales
 {
   estado_led   = digitalRead(actuador_D8);
   bitWrite(output_state, 0, estado_led); 
@@ -1175,9 +1297,19 @@ void loop()
         paso_ph_cal = (float)((7 - 4) / (sensor_ph_7_cal - sensor_ph_4_cal));  // Almacena el paso y los valores de calibración en variables globales.
         ok_calibration = 1; 
         id_trama_ok = 0;
-        id_trama = 0;                                   
+        id_trama = 0;
+        break;        
         //make_trama(7,0);                                               //Hay datos de calibracion en memoria id_trama = 7
         //send_trama();
+      }
+      case(8):  // trama configuracion actuadores
+      {
+        make_trama(8,0);   
+        send_trama();
+        sensor_actuador();
+        trama_ok = 0;
+        id_trama = 0;
+        break;      
       }
       default:break;
     }
