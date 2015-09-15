@@ -48,7 +48,7 @@ int  contador;
 /*Identificadores de trama*/
 byte  id_trama;
 byte  estado_rx;
-byte id_trama_ok;
+byte flag_setpoint;
 /*Variables Set point*/
 byte  sens0_h_sp;  //ph_sp ph set point para sensor y actuador
 byte  sens0_l_sp;  
@@ -201,6 +201,32 @@ int sens2_sp;
 int sens3_sp;
 int sens4_sp;
 int sens5_sp;
+
+/*Variables control automaticon ON/OFF*/
+byte sens0_time_control;
+byte sens0_time_evaluation;
+byte sens0_time_c_y_e;
+byte sens0_incrementador_c_y_e;
+byte sens1_time_control;
+byte sens1_time_evaluation;
+byte sens1_time_c_y_e;
+byte sens1_incrementador_c_y_e;
+byte sens2_time_control;
+byte sens2_time_evaluation;
+byte sens2_time_c_y_e;
+byte sens2_incrementador_c_y_e;
+byte sens3_time_control;
+byte sens3_time_evaluation;
+byte sens3_time_c_y_e;
+byte sens3_incrementador_c_y_e;
+byte sens4_time_control;
+byte sens4_time_evaluation;
+byte sens4_time_c_y_e;
+byte sens4_incrementador_c_y_e;
+byte sens5_time_control;
+byte sens5_time_evaluation;
+byte sens5_time_c_y_e;
+byte sens5_incrementador_c_y_e;
 
 /*Variable estado salidas digitales*/
 byte estado_led;
@@ -369,8 +395,8 @@ int  actuador_D11 = 11;  //Relé 4 D11 en arduino_xbee
   sensor_ph_7_cal = 2.3; //Valor inicial referencial para el voltaje en ADC para el sensor de pH igual a 7
   /*
   50mv/pH referencia
-  1 V offset del sumador
-  el sumador invierte señal sensor pH y suma offset
+  2.3 V offset del sumador
+
   ph7 = 2.327, pH4 = 3.043 refencial
   paso inicial = (7-4)/(2.327-3.043)
   paso =  pH/volt
@@ -384,8 +410,8 @@ int  actuador_D11 = 11;  //Relé 4 D11 en arduino_xbee
   sens5_actual = 0;
   
   sens0_anterior = 0;
-  sens1_anterior = 0;
-  sens2_anterior = 0;
+  sens1_anterior = 490;
+  sens2_anterior = 490;
   sens3_anterior = 0;
   sens4_anterior = 0;
   sens5_anterior = 0;
@@ -450,7 +476,7 @@ int  actuador_D11 = 11;  //Relé 4 D11 en arduino_xbee
   suma_temp = 0;
   suma_cont_aux = 0;
     */
-  id_trama_ok = 0;
+  flag_setpoint = 0;
     
   sens0_tx_h = 0;
   sens0_tx_l = 0;
@@ -468,6 +494,32 @@ int  actuador_D11 = 11;  //Relé 4 D11 en arduino_xbee
   aux_tx1    = 0;
   aux_tx2    = 0;
   
+  /*Variables setpoint*/
+  sens0_time_control        = 2;  //tiempo en segundo de accionamiento del actuador
+  sens0_time_evaluation     = 4;  //tiempo de evaluacion de la accion del actuador sobre el valor de proceso
+  sens0_time_c_y_e          = sens0_time_control + sens0_time_evaluation;
+  sens0_incrementador_c_y_e = 0;
+  sens1_time_control        = 2;
+  sens1_time_evaluation     = 4;
+  sens1_time_c_y_e          = sens1_time_control + sens1_time_evaluation;
+  sens1_incrementador_c_y_e = 0;
+  sens2_time_control        = 2;
+  sens2_time_evaluation     = 4;
+  sens2_time_c_y_e          = sens2_time_control + sens2_time_evaluation;
+  sens2_incrementador_c_y_e = 0;
+  sens3_time_control        = 2;
+  sens3_time_evaluation     = 4;
+  sens3_time_c_y_e          = sens3_time_control + sens3_time_evaluation;
+  sens3_incrementador_c_y_e = 0;
+  sens4_time_control        = 2;
+  sens4_time_evaluation     = 4;
+  sens4_time_c_y_e          = sens4_time_control + sens4_time_evaluation;
+  sens4_incrementador_c_y_e = 0;
+  sens5_time_control        = 2;
+  sens5_time_evaluation     = 4;
+  sens5_time_c_y_e          = sens5_time_control + sens5_time_evaluation;
+  sens5_incrementador_c_y_e = 0;
+
   /*incrementadores*/
   incrementador_tx  = 0;
   id_trama    = 0;
@@ -511,10 +563,11 @@ int deco_trama()
 2	Trama de control manual
 3	Trama de calibraciòn
 4       Trama de inicio de programa
-5       Trama de apagado de actuadore
+5       Trama de apagado de actuadores
 6       Trama de error recepción de datos
 7       Trama de lectura valores de calibración EEPROM
 8       Trama de configuración
+9       Trama de reinicio valor de variables
 */
   id_trama    = arreglo[1];
   estado_rx   = arreglo[2];   // Incrementador
@@ -522,21 +575,23 @@ int deco_trama()
   {
     case(1): //trama = setpoint
     { 
-      sens0_h_sp  = arreglo[3];  //ph_sp ph set point para sensor y actuador
-      sens0_l_sp  = arreglo[4];  
-      sens1_h_sp  = arreglo[5];  
-      sens1_l_sp  = arreglo[6];
-      sens2_h_sp  = arreglo[7];  //ph_sp ph set point para sensor y actuador
-      sens2_l_sp  = arreglo[8];  
-      sens3_h_sp  = arreglo[9];  
-      sens3_l_sp  = arreglo[10];
-      sens4_h_sp  = arreglo[11];  
-      sens4_l_sp  = arreglo[12];
-      sens5_h_sp  = arreglo[13];  
-      sens5_l_sp  = arreglo[14];  
-      aux_sp      = arreglo[15];
-      aux1_sp     = arreglo[16];    
-      aux2_sp     = arreglo[17];     
+      flag_setpoint = arreglo[1];   //set point en ejecucion
+      
+      sens0_h_sp    = arreglo[3];  //ph_sp ph set point para sensor y actuador
+      sens0_l_sp    = arreglo[4];  
+      sens1_h_sp    =  arreglo[5];  
+      sens1_l_sp    = arreglo[6];
+      sens2_h_sp    = arreglo[7];  //ph_sp ph set point para sensor y actuador
+      sens2_l_sp    = arreglo[8];  
+      sens3_h_sp    = arreglo[9];  
+      sens3_l_sp    = arreglo[10];
+      sens4_h_sp    = arreglo[11];  
+      sens4_l_sp    = arreglo[12];
+      sens5_h_sp    = arreglo[13];  
+      sens5_l_sp    = arreglo[14];  
+      aux_sp        = arreglo[15];
+      aux1_sp       = arreglo[16];    
+      aux2_sp       = arreglo[17];     
       
       //Union de byte alto con byte bajo para valor de set point  de 0 a 1023 
       sens0_sp = (sens0_h_sp << 8) + sens0_l_sp;
@@ -750,38 +805,82 @@ void sensor_actuador()
   }
 }
 */
-/*
+
 void set_point()
 {
-  if (sens0_pros <= sens0_sp)    //Set point para entrada ADC
+  if(sens0_act_asi =! 0)
+  //Tiene un actuador asignado a  la variable
   {
-    digitalWrite(sens0_act_asi,HIGH);
+    if(sens0_pros <= sens0_sp)
+    {
+       digitalWrite(sens0_act_asi,HIGH);
+    }
+    else
+    {
+      digitalWrite(sens0_act_asi,LOW);
+    }    
   }
-  else if(sens0_pros >= sens0_sp)  
+  if(sens1_act_asi =! 0)
+  //Tiene un controlador asignado a  la variable
   {
-    digitalWrite(sens0_act_asi,LOW);
+    if(sens1_pros <= sens1_sp)
+    {
+       digitalWrite(sens1_act_asi,HIGH);
+    }
+    else
+    {
+      digitalWrite(sens1_act_asi,LOW);
+    }
   }
-  
-  if (controlador_ph_value <= ph_sp)
+  if(sens2_act_asi =! 0)
+  //Tiene un controlador asignado a  la variable
   {
-    digitalWrite(led2,HIGH);
+    if(sens2_pros <= sens2_sp)
+    {
+       digitalWrite(sens2_act_asi,HIGH);
+    }
+    else
+    {
+      digitalWrite(sens2_act_asi,LOW);
+    }
   }
-  else if(controlador_ph_value >= (ph_sp + 0.2))  //histeresis de 0.2 ph hacia arriba
+  if(sens3_act_asi =! 0)
+  //Tiene un controlador asignado a  la variable
   {
-    digitalWrite(led2,LOW);
+    if(sens3_pros <= sens3_sp)
+    {
+       digitalWrite(sens3_act_asi,HIGH);
+    }
+    else
+    {
+      digitalWrite(sens3_act_asi,LOW);
+    }
   }
-  
-  if (sensor_ptc_value <= (temp_sp - 1.5))  // histeresis entre set point -0.3 y set point - 0.1.
+  if(sens4_act_asi =! 0)
+  //Tiene un controlador asignado a  la variable
   {
-    digitalWrite(led,HIGH);
+    if(sens4_pros <= sens4_sp)
+    {
+       digitalWrite(sens4_act_asi,HIGH);
+    }
+    else
+    {
+      digitalWrite(sens4_act_asi,LOW);
+    }
   }
-  else if(sensor_ptc_value >= (temp_sp - 0.5)) // por retardo de proceso, se apaga antes el calentador
+  if(sens5_act_asi =! 0)
+  //Tiene un controlador asignado a  la variable
   {
-    digitalWrite(led,LOW);
+    if(sens5_pros <= sens5_sp)
+    {
+       digitalWrite(sens5_act_asi,HIGH);
+    }
+    else
+    {
+      digitalWrite(sens5_act_asi,LOW);
+    }
   }
 }
-*/
-
 
 byte set_calibracion(byte flag_c)
 {
@@ -906,7 +1005,7 @@ void lectura_sensores()
     }
     case(5):
     {
-      sens4_read = analogRead(ADC4);                        //Sensor auxiliar 2
+      sens4_read = analogRead(ADC4);                //Sensor auxiliar 2
       sens4_pros = procesar_datos_sens4(sens4_read);
     //  procesar_datos(5);
       break;
@@ -931,14 +1030,14 @@ float procesar_datos_sens0(float sens0_in)
 
 float procesar_datos_sens1(float sens1_in)
 {
-  sens1_actual = 0.01 * sens1_in + sens1_anterior * 0.99;
+  sens1_actual = 0.05 * sens1_in + sens1_anterior * 0.95;
   sens1_anterior = sens1_actual;  
   return sens1_actual; 
 }
 
 float procesar_datos_sens2(float sens2_in)
 {
-  sens2_actual = 0.01 * sens2_in + sens2_anterior * 0.99;
+  sens2_actual = 0.05 * sens2_in + sens2_anterior * 0.95;
   sens2_anterior = sens2_actual;  
   return sens2_actual; 
 }
@@ -1094,7 +1193,24 @@ void variables_reset()
     x_con_ph[h] = 0; //Arreglo controlador pH para filtro IIR Butterworth
     y_con_ph[h] = 0;
   }
-    /*Variable inicio programa*/
+  /*Variable lectura de sensores iniciales*/
+  sens0_h_sp  = 0;  //ph_sp ph set point para sensor y actuador
+  sens0_l_sp  = 0;  
+  sens1_h_sp  = 0;  
+  sens1_l_sp  = 0;
+  sens2_h_sp  = 0;  //ph_sp ph set point para sensor y actuador
+  sens2_l_sp  = 0;  
+  sens3_h_sp  = 0;  
+  sens3_l_sp  = 0;
+  sens4_h_sp  = 0;  
+  sens4_l_sp  = 0;
+  sens5_h_sp  = 0;  
+  sens5_l_sp  = 0;  
+  aux_sp      = 0;
+  aux1_sp     = 0;    
+  aux2_sp     = 0; 
+
+  /*Variable inicio programa*/
   flag_inicio  = 0;
   estado_led   = 0;
   estado_led1  = 0;
@@ -1123,7 +1239,45 @@ void variables_reset()
   seconds     = 0;
   /*Valor sensores*/
   sensor_ph_value = 0;       // decimas a entero para enviar como (byte)
-  controlador_ph_value = 0;  
+  controlador_ph_value = 0; 
+  /*Valor inicial variables filtro*/
+  sens0_actual = 0;
+  sens1_actual = 0;
+  sens2_actual = 0;
+  sens3_actual = 0;
+  sens4_actual = 0;
+  sens5_actual = 0;
+  
+  sens0_anterior = 0;
+  sens1_anterior = 490;
+  sens2_anterior = 490;
+  sens3_anterior = 0;
+  sens4_anterior = 0;
+  sens5_anterior = 0;
+  /*valor de SETPOINT*/
+  sens0_sp = 0;
+  sens1_sp = 0;
+  sens2_sp = 0;
+  sens3_sp = 0;
+  sens4_sp = 0;
+  sens5_sp = 0;
+  
+    /*Valores configuración*/
+  sens0_act_noa  = 0;   //sensor A0 - actuador - no  asignado
+  sens1_act_noa  = 0;
+  sens2_act_noa  = 0; 
+  sens3_act_noa  = 0;
+  sens4_act_noa  = 0;
+  sens5_act_noa  = 0;
+  aux1_config    = 0;
+  aux2_config    = 0;
+  aux3_config    = 0;
+  aux4_config    = 0;
+  aux5_config    = 0;
+  aux6_config    = 0;
+  aux7_config    = 0;
+  aux8_config    = 0;
+  aux9_config    = 0;  
 }
 
 
@@ -1245,7 +1399,7 @@ void loop()
       {
         make_trama(1,0);   // id_trama = 1 trama de set point
         send_trama(); 
-        id_trama_ok = 1;
+        flag_setpoint = 1;
         id_trama = 0;
         break;
       } 
@@ -1255,7 +1409,7 @@ void loop()
         send_trama(); 
         control.manual(inst1_man);
         id_trama = 0; 
-        id_trama_ok = 0;
+        flag_setpoint = 0;
         break;
       }
       case(3): //trama = calibraciòn
@@ -1264,7 +1418,7 @@ void loop()
         send_trama();  
         set_calibracion(flag_cal);
         id_trama = 0;
-        id_trama_ok = 0;
+        flag_setpoint = 0;
         break;
       }
       case(4):
@@ -1272,17 +1426,17 @@ void loop()
         make_trama(4,0);
         send_trama();
         flag_inicio = 1;
-        id_trama_ok = 0;
+        flag_setpoint = 0;
         id_trama = 0;
         break;
       }
-      case(5):
+      case(5):  //apagado de actuadores
       {
         make_trama(5,0);
         send_trama();
         flag_inicio = 0;
         actuadores.off();
-        id_trama_ok = 0;
+        flag_setpoint = 0;
         id_trama = 0;
         break;
       }
@@ -1296,7 +1450,7 @@ void loop()
         sensor_ph_7_cal = ((ph7_msb << 8) + ph7_lsb) * (voltaje_ref_ADC / 1023);
         paso_ph_cal = (float)((7 - 4) / (sensor_ph_7_cal - sensor_ph_4_cal));  // Almacena el paso y los valores de calibración en variables globales.
         ok_calibration = 1; 
-        id_trama_ok = 0;
+        flag_setpoint = 0;
         id_trama = 0;
         break;        
         //make_trama(7,0);                                               //Hay datos de calibracion en memoria id_trama = 7
@@ -1307,10 +1461,21 @@ void loop()
         make_trama(8,0);   
         send_trama();
         sensor_actuador();
-        trama_ok = 0;
+        flag_setpoint = 0;
         id_trama = 0;
         break;      
       }
+      case(9):     // trama reseteo variables y apagado de actuadores
+      {
+        make_trama(9,0);   
+        send_trama();
+        variables_reset();
+        actuadores.off();
+        flag_setpoint = 0;
+        id_trama = 0;
+        break; 
+      }
+      
       default:break;
     }
     
@@ -1332,44 +1497,21 @@ void loop()
     
     // Si id_trama(1) = control  && (1seg / 0.01 seg) = 100, condicion if cada 1 seg.
     /*-Solo se tendra estado manual o automatico, no se podra tener una variable con control automatico y otra con control manual*/
-/*
-    if(id_trama_ok == 1)   
+
+    if(flag_setpoint == 1)   
     { 
-      switch(aux2_sp)
-      {
-        case(1):   //Set_point Esterelizacion con tiempo limite
-        {
-          if(aux1_sp > minutos)
-          {
-            set_point();
-          }
-          else if(aux1_sp <= minutos)
-          {
-            minutos = aux1_sp;
-            actuadores.off();
-          }         
-          break;
-        }
-        case(2):  //Set_point Enfriamiento con tiempo limite
-        {
-          if(aux1_sp > minutos)
-          {
-            set_point();
-          } 
-          else if(aux1_sp <= minutos)
-          {
-            minutos = aux1_sp;
-            actuadores.off();
-          }  
-          break;
-        }
-        case(3):    //Set_point normal
-        {
-          set_point();
-          break;
-        }default:break;
-      } 
-    } */
+      set_point();
+    }
+    else
+    {
+      sens0_incrementador_c_y_e = 0;
+      sens1_incrementador_c_y_e = 0;
+      sens2_incrementador_c_y_e = 0;
+      sens3_incrementador_c_y_e = 0;
+      sens4_incrementador_c_y_e = 0;
+      sens5_incrementador_c_y_e = 0;
+    }   
+    
     seconds = 0;
   }
   
