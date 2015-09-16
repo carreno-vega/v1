@@ -1400,10 +1400,8 @@ void send_trama()
 
 void make_eeprom_trama(byte a,int b)  // a = id_trama = 11 (envio de datos eeprom) , b = i del bucle for
 { 
-  
-  
   sof_tx      = '#';
-  id_trama_tx = a;                          // normal = 1, confirm = 2
+  id_trama_tx = a;                          // a = id_trama = 11 
   estado_tx   = 0;                          // envia estado q se recibiò o incrementador para trama normal 
   sens0_tx_h    = 0xFF & EEPROM.read(10 + b * 12);               //
   sens0_tx_l    = 0xFF & EEPROM.read(11 + b * 12);
@@ -1418,7 +1416,7 @@ void make_eeprom_trama(byte a,int b)  // a = id_trama = 11 (envio de datos eepro
   sens5_tx_h    = 0xFF & EEPROM.read(20 + b * 12);              //
   sens5_tx_l    = 0xFF & EEPROM.read(21 + b * 12);
   
-  aux_tx        = output_state;               //Estado de los relay (Encendido = 1 / Apagado = 0)
+  aux_tx        = 0;               
   aux_tx1       = 0;
   aux_tx2       = 0;
   eof_tx        = '%'; 
