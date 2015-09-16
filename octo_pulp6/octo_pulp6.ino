@@ -14,6 +14,11 @@ float actual_temp,anterior_temp;
 float sensor_ph_sin_filtro;
 float NewSamp;
 float value_fst_sph;
+
+//EEPROM datalogger
+int contador_eeprom;
+int eeprom_tasa;
+int sector_init;
 //float NewSample;
 // comentario prueba
 // comentario 2
@@ -107,7 +112,7 @@ byte sens2_act_noa;
 byte sens3_act_noa;
 byte sens4_act_noa;
 byte sens5_act_noa;
-byte aux1_config;
+byte actuador_h_or_l;
 byte aux2_config;
 byte aux3_config;
 byte aux4_config;
@@ -124,8 +129,16 @@ byte sens2_act_asi;
 byte sens3_act_asi;
 byte sens4_act_asi;
 byte sens5_act_asi;
-/*Variables enviadas*/
 
+/*Actuador disminuye variable proceso = 0 Actuador aumenta variable proceso = 1 , si sens_act_asi = 0 no hay actuador asignado*/
+byte sens0_type_act;
+byte sens1_type_act; 
+byte sens2_type_act; 
+byte sens3_type_act; 
+byte sens4_type_act; 
+byte sens5_type_act;
+
+/*Variables enviadas*/
 byte  sof_tx;
 byte  id_trama_tx;                // normal = 1, confirm = 2
 byte  estado_tx;               // envia estado q se recibiò
@@ -302,6 +315,11 @@ void setup()
   //eeprom
   ok_calibration = 0;
   anterior_ph = actual_ph = 0;
+  //eeprom datalogger
+  sector_init = 10;     //sector inicial de escritura en eeprom
+  contador_eeprom = 0;  // incrementador eeprom
+  eeprom_tasa = 5;      //tasa de escritura
+  
   //PRueba sin filtro
   sensor_ph_sin_filtro = 0;
   
@@ -430,7 +448,7 @@ int  actuador_D11 = 11;  //Relé 4 D11 en arduino_xbee
   sens3_act_noa  = 0;
   sens4_act_noa  = 0;
   sens5_act_noa  = 0;
-  aux1_config    = 0;
+  actuador_h_or_l = 0;
   aux2_config    = 0;
   aux3_config    = 0;
   aux4_config    = 0;
@@ -439,7 +457,14 @@ int  actuador_D11 = 11;  //Relé 4 D11 en arduino_xbee
   aux7_config    = 0;
   aux8_config    = 0;
   aux9_config    = 0;  
-  
+
+/*Actuador disminuye variable proceso = 0 Actuador aumenta variable proceso = 1 , si sens_act_asi = 0 no hay actuador asignado*/
+sens0_type_act   = 0;
+sens1_type_act   = 0; 
+sens2_type_act   = 0; 
+sens3_type_act   = 0; 
+sens4_type_act   = 0; 
+sens5_type_act   = 0;
   //Funcion asignación de actuador al respectivo sensor
   sens0_act_asi  = 0;   //sensor A0 - actuador - no  asignado
   sens1_act_asi  = 0;
@@ -579,7 +604,7 @@ int deco_trama()
       
       sens0_h_sp    = arreglo[3];  //ph_sp ph set point para sensor y actuador
       sens0_l_sp    = arreglo[4];  
-      sens1_h_sp    =  arreglo[5];  
+      sens1_h_sp    = arreglo[5];  
       sens1_l_sp    = arreglo[6];
       sens2_h_sp    = arreglo[7];  //ph_sp ph set point para sensor y actuador
       sens2_l_sp    = arreglo[8];  
@@ -652,22 +677,29 @@ int deco_trama()
     }
     case(8):  //trama=configuración actuadores
     {
-      sens0_act_noa  = arreglo[3];    //ADC
+      sens0_act_noa  = arreglo[3];    //ADC el numero de la entrada (1 a 6) donde esta conectado el actuador
       sens1_act_noa  = arreglo[4];    
       sens2_act_noa  = arreglo[5]; 
       sens3_act_noa  = arreglo[6];
       sens4_act_noa  = arreglo[7];
       sens5_act_noa  = arreglo[8];
 
-      aux1_config   = arreglo[9];
-      aux2_config   = arreglo[10];
-      aux3_config   = arreglo[11];
-      aux4_config   = arreglo[12];
-      aux5_config   = arreglo[13];
-      aux6_config   = arreglo[14];
-      aux7_config   = arreglo[15];
-      aux8_config   = arreglo[16];
-      aux9_config   = arreglo[17]; 
+      actuador_h_or_l   = arreglo[9];  //Actuador disminuye variable proceso = 0 Actuador aumenta variable proceso = 1 , si sens_act_asi = 0 no hay actuador asignado  
+      aux2_config       = arreglo[10]; 
+      aux3_config       = arreglo[11];
+      aux4_config       = arreglo[12];
+      aux5_config       = arreglo[13];
+      aux6_config       = arreglo[14];
+      aux7_config       = arreglo[15];
+      aux8_config       = arreglo[16];
+      aux9_config       = arreglo[17];
+      
+      sens0_type_act   = bitRead(actuador_h_or_l, 0); //Actuador disminuye variable proceso = 0 Actuador aumenta variable proceso = 1 , si sens_act_asi = 0 no hay actuador asignado
+      sens1_type_act   = bitRead(actuador_h_or_l, 1); //Actuador disminuye variable proceso = 0 Actuador aumenta variable proceso = 1 , si sens_act_asi = 0 no hay actuador asignado
+      sens2_type_act   = bitRead(actuador_h_or_l, 2); //Actuador disminuye variable proceso = 0 Actuador aumenta variable proceso = 1 , si sens_act_asi = 0 no hay actuador asignado
+      sens3_type_act   = bitRead(actuador_h_or_l, 3); //Actuador disminuye variable proceso = 0 Actuador aumenta variable proceso = 1 , si sens_act_asi = 0 no hay actuador asignado
+      sens4_type_act   = bitRead(actuador_h_or_l, 4); //Actuador disminuye variable proceso = 0 Actuador aumenta variable proceso = 1 , si sens_act_asi = 0 no hay actuador asignado
+      sens5_type_act   = bitRead(actuador_h_or_l, 5); //Actuador disminuye variable proceso = 0 Actuador aumenta variable proceso = 1 , si sens_act_asi = 0 no hay actuador asignado
     }
     default:break;  
   }
@@ -737,147 +769,168 @@ void sensor_actuador()
 //A4 Lectura controlador pH       4-20 mA a 1- 5   Volts en entrada analoga A4
 //A5 Lectura controlador auxiliar 4-20 mA a 1- 5   Volts en entrada analoga A5
 
-/*void control_manual(byte flag_control_m)
-{
-  switch(flag_control_m)
-  {
-    case(0):  // Actuador pt100 - Calentador OFF
-    { 
-      digitalWrite(sens3_act_asi,LOW);
-      break;
-    }
-    case(1):  // Actuador pt100 - Calentador ON
-    { 
-      digitalWrite(sens3_act_asi,HIGH);
-      break;
-    }
-    case(2):  // BNC Auxiliar OFF
-    { 
-      digitalWrite(sens1_act_asi,LOW);
-      break;
-    }
-    case(3):  // BNC Auxiliar ON
-    { 
-      digitalWrite(sens1_act_asi,LOW);
-      break;
-    }
-    case(4):  // Agitador OFF
-    { 
-      digitalWrite(sens4_act_asi,LOW);
-      break;
-    }
-    case(5):  // Agitador ON
-    { 
-      digitalWrite(sens4_act_asi,HIGH);
-      break;
-    }
-    case(6):  // Compresor OFF
-    { 
-      digitalWrite(sens5_act_asi,LOW);
-      break;
-    }
-    case(7):  // Compresor ON
-    { 
-      digitalWrite(sens5_act_asi,HIGH);
-      break;
-    }
-    case(8):  // Bomba OFF
-    { 
-      digitalWrite(sens2_act_asi,LOW);
-      break;
-    }
-    case(9):  // Bomba ON
-    { 
-      digitalWrite(sens2_act_asi,HIGH);
-      break;
-    }
-    case(10):  //  controlador ADC
-    { 
-      digitalWrite(sens0_act_asi,LOW);
-      break;
-    }
-    case(11):  // Controlador ADC
-    { 
-      digitalWrite(sens0_act_asi,HIGH);
-      break;
-    }
-    default:break;
-  }
-}
-*/
 
 void set_point()
 {
   if(sens0_act_asi =! 0)
-  //Tiene un actuador asignado a  la variable
+  //El sensor 0 Tiene un actuador asignado a  la variable
   {
-    if(sens0_pros <= sens0_sp)
+    if(sens0_type_act = 0)
     {
-       digitalWrite(sens0_act_asi,HIGH);
+      if(sens0_pros >= sens0_sp)
+      {
+        digitalWrite(sens0_act_asi,HIGH);
+      }
+      else
+      {
+        digitalWrite(sens0_act_asi,LOW);
+      }  
     }
-    else
+    else if(sens0_type_act = 1)
     {
-      digitalWrite(sens0_act_asi,LOW);
-    }    
+      if(sens0_pros <= sens0_sp)
+      {
+        digitalWrite(sens0_act_asi,HIGH);
+      }
+      else
+      {
+        digitalWrite(sens0_act_asi,LOW);
+      }  
+    }
   }
+  
   if(sens1_act_asi =! 0)
   //Tiene un controlador asignado a  la variable
   {
-    if(sens1_pros <= sens1_sp)
+    if(sens1_type_act = 0)
     {
-       digitalWrite(sens1_act_asi,HIGH);
+      if(sens1_pros >= sens1_sp)
+      {
+        digitalWrite(sens1_act_asi,HIGH);
+      }
+      else
+      {
+        digitalWrite(sens1_act_asi,LOW);
+      }  
     }
-    else
+    else if(sens1_type_act = 1)
     {
-      digitalWrite(sens1_act_asi,LOW);
+      if(sens1_pros <= sens1_sp)
+      {
+        digitalWrite(sens1_act_asi,HIGH);
+      }
+      else
+      {
+        digitalWrite(sens1_act_asi,LOW);
+      }  
     }
   }
+  
   if(sens2_act_asi =! 0)
   //Tiene un controlador asignado a  la variable
   {
-    if(sens2_pros <= sens2_sp)
+    if(sens2_type_act = 0)
     {
-       digitalWrite(sens2_act_asi,HIGH);
+      if(sens2_pros >= sens2_sp)
+      {
+        digitalWrite(sens2_act_asi,HIGH);
+      }
+      else
+      {
+        digitalWrite(sens2_act_asi,LOW);
+      }  
     }
-    else
+    else if(sens2_type_act = 1)
     {
-      digitalWrite(sens2_act_asi,LOW);
+      if(sens2_pros <= sens2_sp)
+      {
+        digitalWrite(sens2_act_asi,HIGH);
+      }
+      else
+      {
+        digitalWrite(sens2_act_asi,LOW);
+      }  
     }
   }
+  
   if(sens3_act_asi =! 0)
   //Tiene un controlador asignado a  la variable
   {
-    if(sens3_pros <= sens3_sp)
+    if(sens3_type_act = 0)
     {
-       digitalWrite(sens3_act_asi,HIGH);
+      if(sens3_pros >= sens3_sp)
+      {
+        digitalWrite(sens3_act_asi,HIGH);
+      }
+      else
+      {
+        digitalWrite(sens3_act_asi,LOW);
+      }  
     }
-    else
+    else if(sens3_type_act = 1)
     {
-      digitalWrite(sens3_act_asi,LOW);
+      if(sens3_pros <= sens3_sp)
+      {
+        digitalWrite(sens3_act_asi,HIGH);
+      }
+      else
+      {
+        digitalWrite(sens3_act_asi,LOW);
+      }  
     }
   }
+
   if(sens4_act_asi =! 0)
   //Tiene un controlador asignado a  la variable
   {
-    if(sens4_pros <= sens4_sp)
+    if(sens4_type_act = 0)
     {
-       digitalWrite(sens4_act_asi,HIGH);
+      if(sens4_pros >= sens4_sp)
+      {
+        digitalWrite(sens4_act_asi,HIGH);
+      }
+      else
+      {
+        digitalWrite(sens4_act_asi,LOW);
+      }  
     }
-    else
+    else if(sens4_type_act = 1)
     {
-      digitalWrite(sens4_act_asi,LOW);
+      if(sens4_pros <= sens4_sp)
+      {
+        digitalWrite(sens4_act_asi,HIGH);
+      }
+      else
+      {
+        digitalWrite(sens4_act_asi,LOW);
+      }  
     }
   }
+
   if(sens5_act_asi =! 0)
   //Tiene un controlador asignado a  la variable
   {
-    if(sens5_pros <= sens5_sp)
+    if(sens5_type_act = 0)
     {
-       digitalWrite(sens5_act_asi,HIGH);
+      if(sens5_pros >= sens5_sp)
+      {
+        digitalWrite(sens5_act_asi,HIGH);
+      }
+      else
+      {
+        digitalWrite(sens5_act_asi,LOW);
+      }  
     }
-    else
+    else if(sens5_type_act = 1)
     {
-      digitalWrite(sens5_act_asi,LOW);
+      if(sens5_pros <= sens5_sp)
+      {
+        digitalWrite(sens5_act_asi,HIGH);
+      }
+      else
+      {
+        digitalWrite(sens5_act_asi,LOW);
+      }  
     }
   }
 }
@@ -1263,21 +1316,21 @@ void variables_reset()
   sens5_sp = 0;
   
     /*Valores configuración*/
-  sens0_act_noa  = 0;   //sensor A0 - actuador - no  asignado
-  sens1_act_noa  = 0;
-  sens2_act_noa  = 0; 
-  sens3_act_noa  = 0;
-  sens4_act_noa  = 0;
-  sens5_act_noa  = 0;
-  aux1_config    = 0;
-  aux2_config    = 0;
-  aux3_config    = 0;
-  aux4_config    = 0;
-  aux5_config    = 0;
-  aux6_config    = 0;
-  aux7_config    = 0;
-  aux8_config    = 0;
-  aux9_config    = 0;  
+  sens0_act_noa    = 0;   //sensor A0 - actuador - no  asignado
+  sens1_act_noa    = 0;
+  sens2_act_noa    = 0; 
+  sens3_act_noa    = 0;
+  sens4_act_noa    = 0;
+  sens5_act_noa    = 0;
+  actuador_h_or_l  = 0;
+  aux2_config      = 0;
+  aux3_config      = 0;
+  aux4_config      = 0;
+  aux5_config      = 0;
+  aux6_config      = 0;
+  aux7_config      = 0;
+  aux8_config      = 0;
+  aux9_config      = 0;  
 }
 
 
@@ -1343,6 +1396,32 @@ void send_trama()
   Serial.write(aux_tx2);
   Serial.write(eof_tx); 
 
+}
+
+void make_eeprom_trama(byte a,int b)  // a = id_trama = 11 (envio de datos eeprom) , b = i del bucle for
+{ 
+  
+  
+  sof_tx      = '#';
+  id_trama_tx = a;                          // normal = 1, confirm = 2
+  estado_tx   = 0;                          // envia estado q se recibiò o incrementador para trama normal 
+  sens0_tx_h    = 0xFF & EEPROM.read(10 + b * 12);               //
+  sens0_tx_l    = 0xFF & EEPROM.read(11 + b * 12);
+  sens1_tx_h    = 0xFF & EEPROM.read(12 + b * 12);               //
+  sens1_tx_l    = 0xFF & EEPROM.read(13 + b * 12);
+  sens2_tx_h    = 0xFF & EEPROM.read(14 + b * 12);               //
+  sens2_tx_l    = 0xFF & EEPROM.read(15 + b * 12);
+  sens3_tx_h    = 0xFF & EEPROM.read(16 + b * 12);              //
+  sens3_tx_l    = 0xFF & EEPROM.read(17 + b * 12);
+  sens4_tx_h    = 0xFF & EEPROM.read(18 + b * 12);               //
+  sens4_tx_l    = 0xFF & EEPROM.read(19 + b * 12);
+  sens5_tx_h    = 0xFF & EEPROM.read(20 + b * 12);              //
+  sens5_tx_l    = 0xFF & EEPROM.read(21 + b * 12);
+  
+  aux_tx        = output_state;               //Estado de los relay (Encendido = 1 / Apagado = 0)
+  aux_tx1       = 0;
+  aux_tx2       = 0;
+  eof_tx        = '%'; 
 }
 
 int read_trama()
@@ -1475,6 +1554,18 @@ void loop()
         id_trama = 0;
         break; 
       }
+     case(10):   //trama de data logger
+     {
+       make_trama(10,0);
+       send_trama();
+       aux_eeprom = 0;
+       for(int i = 0; i++; i =((sector_init - 10) / 12)) 
+       {
+         make_eeprom_trama(11, i);
+         send_trama();
+         delay(5);
+       }
+   }
       
       default:break;
     }
@@ -1493,6 +1584,36 @@ void loop()
     estado_output();     //estado de la salidas digitales HIGH = 1 o LOW = 0  valores almacenados en variable output_state.
     make_trama(0,incrementador_tx);  // 0 trama normal hacia java cada 1 segundo, con incrementador_tx++
     send_trama();
+    contador_eeprom++;
+    
+    if((contador_eeprom == eeprom_tasa) && (aux_eeprom == 0))  // Cada x segundos y siempre que no estè llena la memoria
+    {
+      EEPROM.write(sector_init,sens0_tx_h);  // inicia en el byte 10, EEPROM
+      EEPROM.write(sector_init+1,sens0_tx_l);
+      EEPROM.write(sector_init+2,sens1_tx_h);
+      EEPROM.write(sector_init+3,sens1_tx_l);
+      EEPROM.write(sector_init+4,sens2_tx_h);
+      EEPROM.write(sector_init+5,sens2_tx_l);
+      EEPROM.write(sector_init+6,sens3_tx_h);
+      EEPROM.write(sector_init+7,sens3_tx_l);
+      EEPROM.write(sector_init+8,sens4_tx_h);
+      EEPROM.write(sector_init+9,sens4_tx_l);
+      EEPROM.write(sector_init+10,sens5_tx_h);
+      EEPROM.write(sector_init+11,sens5_tx_l);
+      sector_init = sector_init + 12;
+      
+      if(sector_init >= 982)
+      {
+        sector_init = 10;
+        aux_eeprom = 1;
+      }
+      else
+      {
+        aux_eeprom = 0;
+      }
+      
+      contador_eeprom = 0;
+    }
     /*---------------------------------------------------------------------Control ON/OFF de variables - Trama SETPOINT-----------------*/
     
     // Si id_trama(1) = control  && (1seg / 0.01 seg) = 100, condicion if cada 1 seg.
