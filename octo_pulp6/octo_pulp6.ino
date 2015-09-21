@@ -16,6 +16,7 @@ float NewSamp;
 float value_fst_sph;
 
 //EEPROM datalogger
+int j;
 int contador_eeprom;
 int eeprom_tasa;
 int sector_init;
@@ -318,7 +319,8 @@ void setup()
   //eeprom datalogger
   sector_init = 10;     //sector inicial de escritura en eeprom
   contador_eeprom = 0;  // incrementador eeprom
-  eeprom_tasa = 5;      //tasa de escritura
+  eeprom_tasa = 2;      //tasa de escritura en segundos
+  aux_eeprom = 0;
   
   //PRueba sin filtro
   sensor_ph_sin_filtro = 0;
@@ -1402,7 +1404,7 @@ void make_eeprom_trama(byte a,int b)  // a = id_trama = 11 (envio de datos eepro
 { 
   sof_tx      = '#';
   id_trama_tx = a;                          // a = id_trama = 11 
-  estado_tx   = 0;                          // envia estado q se recibiò o incrementador para trama normal 
+  estado_tx   = b;                          // envia estado q se recibiò o incrementador para trama normal 
   sens0_tx_h    = 0xFF & EEPROM.read(10 + b * 12);               //
   sens0_tx_l    = 0xFF & EEPROM.read(11 + b * 12);
   sens1_tx_h    = 0xFF & EEPROM.read(12 + b * 12);               //
@@ -1554,15 +1556,21 @@ void loop()
       }
      case(10):   //trama de data logger
      {
-       make_trama(10,0);
+       make_trama(10,0);   //Peticion de datos en memoria
        send_trama();
-       aux_eeprom = 0;
-       for(int i = 0; i++; i =((sector_init - 10) / 12)) 
+       
+       for(j = 0; j <=((sector_init - 10) / 12); j++) 
        {
-         make_eeprom_trama(11, i);
+         make_eeprom_trama(11, j);   //envio de datos de memoria
          send_trama();
          delay(5);
        }
+       sector_init = 10;
+       aux_eeprom = 0;
+       contador_eeprom = 0;
+       make_trama(12,0);        //Fin del envio de datos de memoria
+       send_trama();
+       id_trama = 0;
    }
       
       default:break;
@@ -1599,10 +1607,11 @@ void loop()
       EEPROM.write(sector_init+10,sens5_tx_h);
       EEPROM.write(sector_init+11,sens5_tx_l);
       sector_init = sector_init + 12;
-      
+      make_trama(13,sector_init);
+      send_trama();
       if(sector_init >= 982)
       {
-        sector_init = 10;
+        sector_init = 982;
         aux_eeprom = 1;
       }
       else
@@ -1629,8 +1638,7 @@ void loop()
       sens3_incrementador_c_y_e = 0;
       sens4_incrementador_c_y_e = 0;
       sens5_incrementador_c_y_e = 0;
-    }   
-    
+    }       
     seconds = 0;
   }
   
@@ -1640,8 +1648,7 @@ void loop()
     seconds++;             //aumenta cada 10 (ms)
     milisegundos++;        //aumenta cada 10 (ms)  
     timer_muestreo++;
-    timer_loop++;     
-    
+    timer_loop++;      
     // SOLO PARA MINUTOS
     if(milisegundos == 100)  // milisegundos == 100 * 10 (ms) = 1 seg
     {
@@ -1658,6 +1665,6 @@ void loop()
   }
 } //<- final loop
 
- 
+
 
 
