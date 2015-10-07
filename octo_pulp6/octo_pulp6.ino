@@ -702,6 +702,12 @@ int deco_trama()
       sens3_type_act   = bitRead(actuador_h_or_l, 3); //Actuador disminuye variable proceso = 0 Actuador aumenta variable proceso = 1 , si sens_act_asi = 0 no hay actuador asignado
       sens4_type_act   = bitRead(actuador_h_or_l, 4); //Actuador disminuye variable proceso = 0 Actuador aumenta variable proceso = 1 , si sens_act_asi = 0 no hay actuador asignado
       sens5_type_act   = bitRead(actuador_h_or_l, 5); //Actuador disminuye variable proceso = 0 Actuador aumenta variable proceso = 1 , si sens_act_asi = 0 no hay actuador asignado
+      break;
+    }
+    case(14):
+    {
+      eeprom_tasa  = arreglo[3];  //tiempo en minutos almacenamiento en datalogger
+      break;
     }
     default:break;  
   }
@@ -1571,7 +1577,15 @@ void loop()
        make_trama(12,0);        //Fin del envio de datos de memoria
        send_trama();
        id_trama = 0;
-   }
+     }
+    case(14):     // trama con valor en minutos para variable eeprom_tasa, tiempo de escritura en data logger
+    {
+      make_trama(14,0);   
+      send_trama();
+      id_trama = 0;
+      break; 
+    }
+     
       
       default:break;
     }
@@ -1590,7 +1604,7 @@ void loop()
     estado_output();     //estado de la salidas digitales HIGH = 1 o LOW = 0  valores almacenados en variable output_state.
     make_trama(0,incrementador_tx);  // 0 trama normal hacia java cada 1 segundo, con incrementador_tx++
     send_trama();
-    contador_eeprom++;
+    
     
     if((contador_eeprom == eeprom_tasa) && (aux_eeprom == 0))  // Cada x segundos y siempre que no estè llena la memoria
     {
@@ -1658,7 +1672,8 @@ void loop()
     if(segundos == 60)      // segundos == 60 = 1 minuto
     {
       segundos = 0;
-      minutos++;
+      //minutos++;
+      contador_eeprom++;
     }
     // END SOLO PARA MINUTOS 
     aux_timer1 = 0;    
