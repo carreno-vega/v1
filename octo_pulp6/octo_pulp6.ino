@@ -1435,6 +1435,7 @@ int read_trama()
   arreglo[contador] = Serial.read();   
   if(arreglo[contador] == '#')                                    
   {
+
     do                                                 
     {
       contador++;
@@ -1577,18 +1578,25 @@ void loop()
        make_trama(12,0);        //Fin del envio de datos de memoria
        send_trama();
        id_trama = 0;
+       break;
      }
     case(14):     // trama con valor en minutos para variable eeprom_tasa, tiempo de escritura en data logger
     {
-      make_trama(14,0);   
+      make_trama(14,eeprom_tasa);   
       send_trama();
       id_trama = 0;
       break; 
     }
-     
-      
-      default:break;
+    case(15):     // recepcion de trama 15 y envio de trama =15
+    {
+      make_trama(15,0);   
+      send_trama();
+      id_trama = 0;
+      break; 
     }
+          
+    default:break;
+   }
     
     // CADA 100 ms LECTURA DE SENSORES
     timer_lectura++;        //timer de lectura de sensores aumenta cada 100 (ms)
