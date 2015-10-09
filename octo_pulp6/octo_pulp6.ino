@@ -687,7 +687,7 @@ int deco_trama()
       sens5_act_noa  = arreglo[8];
 
       actuador_h_or_l   = arreglo[9];  //Actuador disminuye variable proceso = 0 Actuador aumenta variable proceso = 1 , si sens_act_asi = 0 no hay actuador asignado  
-      aux2_config       = arreglo[10]; 
+      aux2_config       = arreglo[10]; //sensor del 0 al 5 con dos actuadores /actuador 1 y actuador 2 (Digital output 8 y 9 )
       aux3_config       = arreglo[11];
       aux4_config       = arreglo[12];
       aux5_config       = arreglo[13];
@@ -718,7 +718,7 @@ void sensor_actuador()
   //Si sens_act_noa = 0, no se le asigna ningun actuador, si ya tiene un actuador asignado este vuelve a no tener asignación.
   if(sens0_act_noa > 0)
   {
-    sens0_act_asi = sens0_act_noa + 7;
+    sens0_act_asi = sens0_act_noa + 7; 
   }
   else if(sens0_act_noa = 0)
   {
@@ -780,10 +780,11 @@ void sensor_actuador()
 
 void set_point()
 {
-  if(sens0_act_asi =! 0)
+  
+  if(sens0_act_asi =! 0)  //al sensor le ha sido asigando un salida digital ( 8 - 9 o 10 )
   //El sensor 0 Tiene un actuador asignado a  la variable
   {
-    if(sens0_type_act = 0)
+    if(sens0_type_act = 0) //logica positiva
     {
       if(sens0_pros >= sens0_sp)
       {
@@ -794,7 +795,7 @@ void set_point()
         digitalWrite(sens0_act_asi,LOW);
       }  
     }
-    else if(sens0_type_act = 1)
+    else if(sens0_type_act = 1)  //logica negativa
     {
       if(sens0_pros <= sens0_sp)
       {
@@ -805,10 +806,9 @@ void set_point()
         digitalWrite(sens0_act_asi,LOW);
       }  
     }
-  }
-  
-  if(sens1_act_asi =! 0)
-  //Tiene un controlador asignado a  la variable
+  } 
+
+  if((sens1_act_asi =! 0) && (aux2_config =! 1))
   {
     if(sens1_type_act = 0)
     {
@@ -831,10 +831,24 @@ void set_point()
       {
         digitalWrite(sens1_act_asi,LOW);
       }  
-    }
+    }    
   }
-  
-  if(sens2_act_asi =! 0)
+  else if((sens1_act_asi =! 0) && (aux2_config == 1))
+  //Tiene dos controladores asignados a  la variable
+  {
+    
+      if(sens1_pros >= sens1_sp)
+      {
+        digitalWrite(sens1_act_asi,HIGH);
+        digitalWrite(sens1_act_asi+1,LOW);
+      }
+      else
+      {
+        digitalWrite(sens1_act_asi,LOW);
+        digitalWrite(sens1_act_asi+1,HIGH);
+      }  
+  }  
+  if((sens2_act_asi =! 0) && (aux2_config =! 2))
   //Tiene un controlador asignado a  la variable
   {
     if(sens2_type_act = 0)
@@ -859,6 +873,20 @@ void set_point()
         digitalWrite(sens2_act_asi,LOW);
       }  
     }
+  }
+   else if((sens1_act_asi =! 0) && (aux2_config == 2))
+  //Tiene un controlador asignado a  la variable
+  {
+    if(sens1_pros >= sens1_sp)
+    {
+      digitalWrite(sens1_act_asi,HIGH);
+      digitalWrite(sens1_act_asi+1,LOW);
+    }
+    else
+    {
+      digitalWrite(sens1_act_asi,LOW);
+      digitalWrite(sens1_act_asi+1,HIGH);
+    }  
   }
   
   if(sens3_act_asi =! 0)
@@ -1381,31 +1409,6 @@ byte make_trama(byte a,byte b)
   eof_tx        = '%';
 }
 
-void send_trama()
-{
-  Serial.write(sof_tx);
-  Serial.write(id_trama_tx);
-  Serial.write(estado_tx);
-  Serial.write(sens0_tx_h);
-  Serial.write(sens0_tx_l);
-  Serial.write(sens1_tx_h);
-  Serial.write(sens1_tx_l);
-  Serial.write(sens2_tx_h);
-  Serial.write(sens2_tx_l);
-  Serial.write(sens3_tx_h);
-  Serial.write(sens3_tx_l);
-  Serial.write(sens4_tx_h);
-  Serial.write(sens4_tx_l);
-  Serial.write(sens5_tx_h);
-  Serial.write(sens5_tx_l);
-  
-  Serial.write(aux_tx);
-  Serial.write(aux_tx1);
-  Serial.write(aux_tx2);
-  Serial.write(eof_tx); 
-
-}
-
 void make_eeprom_trama(byte a,int b)  // a = id_trama = 11 (envio de datos eeprom) , b = i del bucle for
 { 
   sof_tx      = '#';
@@ -1430,6 +1433,53 @@ void make_eeprom_trama(byte a,int b)  // a = id_trama = 11 (envio de datos eepro
   eof_tx        = '%'; 
 }
 
+void make_trama_actuadores(byte a, byte b, byte c)
+{
+    sof_tx      = '#';
+  id_trama_tx   = a;                          // a = id_trama = 11 
+  estado_tx     = b;                          // envia estado q se recibiò o incrementador para trama normal 
+  sens0_tx_h    = c;              
+  sens0_tx_l    = 0;
+  sens1_tx_h    = 0;             
+  sens1_tx_l    = 0;
+  sens2_tx_h    = 0;              
+  sens2_tx_l    = 0;
+  sens3_tx_h    = 0;              
+  sens3_tx_l    = 0;
+  sens4_tx_h    = 0;           
+  sens4_tx_l    = 0;
+  sens5_tx_h    = 0;            
+  sens5_tx_l    = 0;
+  aux_tx        = 0;               
+  aux_tx1       = 0;
+  aux_tx2       = 0;
+  eof_tx        = '%'; 
+}
+
+void send_trama()
+{
+  Serial.write(sof_tx);
+  Serial.write(id_trama_tx);
+  Serial.write(estado_tx);
+  Serial.write(sens0_tx_h);
+  Serial.write(sens0_tx_l);
+  Serial.write(sens1_tx_h);
+  Serial.write(sens1_tx_l);
+  Serial.write(sens2_tx_h);
+  Serial.write(sens2_tx_l);
+  Serial.write(sens3_tx_h);
+  Serial.write(sens3_tx_l);
+  Serial.write(sens4_tx_h);
+  Serial.write(sens4_tx_l);
+  Serial.write(sens5_tx_h);
+  Serial.write(sens5_tx_l);
+  
+  Serial.write(aux_tx);
+  Serial.write(aux_tx1);
+  Serial.write(aux_tx2);
+  Serial.write(eof_tx); 
+
+}
 int read_trama()
 {
   arreglo[contador] = Serial.read();   
@@ -1544,7 +1594,7 @@ void loop()
       }
       case(8):  // trama configuracion actuadores
       {
-        make_trama(8,0);   
+        make_trama_actuadores(8,actuador_h_or_l,aux2_config );   
         send_trama();
         sensor_actuador();
         flag_setpoint = 0;
@@ -1559,7 +1609,7 @@ void loop()
         actuadores.off();
         flag_setpoint = 0;
         id_trama = 0;
-        break; 
+        break;
       }
      case(10):   //trama de data logger
      {
